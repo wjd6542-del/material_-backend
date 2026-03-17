@@ -12,8 +12,6 @@ export default {
   async getList(data) {
     const where = {};
 
-    console.log("데이터 확인!!", data);
-
     if (data?.warehouse_id) {
       where.warehouse_id = Number(data.warehouse_id);
     }

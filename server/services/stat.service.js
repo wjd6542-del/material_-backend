@@ -2,9 +2,13 @@
 import AppError from "../errors/AppError.js";
 
 class StatService {
-  // 날자 처리
+  // ==============================
+  // 공통 유틸
+  // ==============================
+
+  // KST 기준 날짜 범위
   getDateRange(date = null) {
-    const target = date ? new Date(date) : new Date();
+    const target = date ? new Date(`${date}T00:00:00+09:00`) : new Date();
 
     const start = new Date(target);
     start.setHours(0, 0, 0, 0);
@@ -12,88 +16,78 @@ class StatService {
     const end = new Date(target);
     end.setHours(23, 59, 59, 999);
 
-    const end_field = new Date(target);
-    return { start, end, end_field };
+    return { start, end, target };
   }
 
-  // 입고 통계 리스트 확인
+  // 날짜 문자열 변환
+  formatDate(date) {
+    return new Date(date).toISOString().slice(0, 10);
+  }
+
+  // 조회용 날짜 where 생성
+  buildDateWhere(data) {
+    if (!data.startDate || !data.endDate) return {};
+
+    const start = new Date(`${data.startDate}T00:00:00+09:00`);
+    const end = new Date(`${data.endDate}T23:59:59+09:00`);
+
+    return {
+      date: {
+        gte: start,
+        lte: end,
+      },
+    };
+  }
+
+  // ==============================
+  // 리스트 조회
+  // ==============================
+
   async inboundList(data) {
-    const where = {};
-
-    if (data.material_id) {
-      where.material_id = data.material_id;
-    }
-
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
+    const where = {
+      ...this.buildDateWhere(data),
+      ...(data.material_id && { material_id: data.material_id }),
+    };
 
     const rows = await prisma.inboundDailyStat.findMany({
       where,
-      include: {
-        material: true,
-      },
+      include: { material: true },
       orderBy: { date: "desc" },
     });
 
-    const result = rows.map((r) => ({
+    return rows.map((r) => ({
       ...r,
-      date: r.date.toISOString().slice(0, 10),
+      date: this.formatDate(r.date),
       material_name: r.material?.name ?? "",
     }));
-    return result;
   }
 
-  // 입고 통계 리스트 확인
   async outboundList(data) {
-    const where = {};
-
-    if (data.material_id) {
-      where.material_id = data.material_id;
-    }
-
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
+    const where = {
+      ...this.buildDateWhere(data),
+      ...(data.material_id && { material_id: data.material_id }),
+    };
 
     const rows = await prisma.outboundDailyStat.findMany({
       where,
-      include: {
-        material: true,
-      },
+      include: { material: true },
       orderBy: { date: "desc" },
     });
 
-    const result = rows.map((r) => ({
+    return rows.map((r) => ({
       ...r,
-      date: r.date.toISOString().slice(0, 10),
+      date: this.formatDate(r.date),
       material_name: r.material?.name ?? "",
     }));
-    return result;
   }
 
-  // 재고 통계 리스트 확인
   async stockList(data) {
-    const where = {};
+    const where = {
+      ...this.buildDateWhere(data),
+      ...(data.material_id && { material_id: data.material_id }),
+    };
 
-    if (data.material_id) {
-      where.material_id = data.material_id;
-    }
-
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
-
-    const rows = await prisma.StockDailySnapshot.findMany({
+    const rows = await prisma.stockDailySnapshot.findMany({
       where,
       include: {
         material: true,
@@ -102,18 +96,21 @@ class StatService {
       orderBy: { date: "desc" },
     });
 
-    const result = rows.map((r) => ({
+    return rows.map((r) => ({
       ...r,
-      date: r.date.toISOString().slice(0, 10),
+      date: this.formatDate(r.date),
       material_name: r.material?.name ?? "",
       warehouse_name: r.warehouse?.name ?? "",
     }));
-    return result;
   }
 
-  // 일별 일고 처리
+  // ==============================
+  // 입고 일별 통계
+  // ==============================
+
   async createInboundDailyStat(date = null) {
-    const { start, end, end_field } = this.getDateRange(date);
+    const { start, end, target } = this.getDateRange(date);
+
     const rows = await prisma.inboundItem.groupBy({
       by: ["material_id"],
       _sum: {
@@ -130,42 +127,45 @@ class StatService {
       },
     });
 
-    if (rows.length == 0) {
+    if (!rows.length) {
       throw new AppError("조회된 결과가 없습니다.", "NO_DATA");
     }
 
-    for (const r of rows) {
-      await prisma.inboundDailyStat.upsert({
-        where: {
-          date_material_id: {
-            date: end_field,
-            material_id: r.material_id,
+    await Promise.all(
+      rows.map((r) =>
+        prisma.inboundDailyStat.upsert({
+          where: {
+            date_material_id: {
+              date: target,
+              material_id: r.material_id,
+            },
           },
-        },
-        update: {
-          total_qty: r._sum.quantity ?? 0,
-          total_cost: r._sum.amount ?? 0,
-        },
-        create: {
-          date: end_field,
-          material_id: r.material_id,
-          total_qty: r._sum.quantity ?? 0,
-          total_cost: r._sum.amount ?? 0,
-        },
-      });
-    }
+          update: {
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_cost: Number(r._sum.amount ?? 0),
+          },
+          create: {
+            date: target,
+            material_id: r.material_id,
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_cost: Number(r._sum.amount ?? 0),
+          },
+        }),
+      ),
+    );
 
     return {
-      success: true,
+      type: "inbound",
       count: rows.length,
     };
   }
 
-  /**
-   * 출고 일별 통계
-   */
+  // ==============================
+  // 출고 일별 통계 (🔥 수정 완료)
+  // ==============================
+
   async createOutboundDailyStat(date = null) {
-    const { start, end, end_field } = this.getDateRange(date);
+    const { start, end, target } = this.getDateRange(date);
 
     const rows = await prisma.outboundItem.groupBy({
       by: ["material_id"],
@@ -189,41 +189,45 @@ class StatService {
       return { type: "outbound", count: 0 };
     }
 
-    const data = rows.map((r) => ({
-      date: end_field,
-      material_id: r.material_id,
-      total_qty: Number(r._sum.quantity ?? 0),
-      total_sales: Number(r._sum.sale_amount ?? 0),
-      total_cost: Number(r._sum.cost_amount ?? 0),
-      total_profit: Number(r._sum.profit ?? 0),
-    }));
-
-    await prisma.$transaction([
-      prisma.outboundDailyStat.deleteMany({
-        where: {
-          date: {
-            gte: start,
-            lt: end,
+    await Promise.all(
+      rows.map((r) =>
+        prisma.outboundDailyStat.upsert({
+          where: {
+            date_material_id: {
+              date: target,
+              material_id: r.material_id,
+            },
           },
-        },
-      }),
-      prisma.outboundDailyStat.createMany({
-        data,
-        skipDuplicates: true,
-      }),
-    ]);
+          update: {
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_sales: Number(r._sum.sale_amount ?? 0),
+            total_cost: Number(r._sum.cost_amount ?? 0),
+            total_profit: Number(r._sum.profit ?? 0),
+          },
+          create: {
+            date: target,
+            material_id: r.material_id,
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_sales: Number(r._sum.sale_amount ?? 0),
+            total_cost: Number(r._sum.cost_amount ?? 0),
+            total_profit: Number(r._sum.profit ?? 0),
+          },
+        }),
+      ),
+    );
 
     return {
       type: "outbound",
-      count: data.length,
+      count: rows.length,
     };
   }
 
-  // 일별 재고 처리
-  async createStockDailyStat(date = null) {
-    const target = date ? new Date(date) : new Date();
+  // ==============================
+  // 재고 스냅샷
+  // ==============================
 
-    target.setHours(0, 0, 0, 0);
+  async createStockDailyStat(date = null) {
+    const { target } = this.getDateRange(date);
 
     const stocks = await prisma.stock.findMany({
       select: {
@@ -233,26 +237,28 @@ class StatService {
       },
     });
 
-    for (const s of stocks) {
-      await prisma.stockDailySnapshot.upsert({
-        where: {
-          date_material_id_warehouse_id: {
+    await Promise.all(
+      stocks.map((s) =>
+        prisma.stockDailySnapshot.upsert({
+          where: {
+            date_material_id_warehouse_id: {
+              date: target,
+              material_id: s.material_id,
+              warehouse_id: s.warehouse_id,
+            },
+          },
+          update: {
+            quantity: s.quantity,
+          },
+          create: {
             date: target,
             material_id: s.material_id,
             warehouse_id: s.warehouse_id,
+            quantity: s.quantity,
           },
-        },
-        update: {
-          quantity: s.quantity,
-        },
-        create: {
-          date: target,
-          material_id: s.material_id,
-          warehouse_id: s.warehouse_id,
-          quantity: s.quantity,
-        },
-      });
-    }
+        }),
+      ),
+    );
 
     return {
       type: "stock",
@@ -260,15 +266,12 @@ class StatService {
     };
   }
 
-  // 입고 차트용
+  // ==============================
+  // 차트용
+  // ==============================
+
   async inboundDailyTotalAmount(data) {
-    const where = {};
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
+    const where = this.buildDateWhere(data);
 
     const rows = await prisma.inboundDailyStat.groupBy({
       where,
@@ -277,64 +280,42 @@ class StatService {
         total_qty: true,
         total_cost: true,
       },
-      orderBy: { date: "desc" },
+      orderBy: { date: "asc" },
     });
 
-    const result = rows.map((r) => ({
-      ...r,
-      date: r.date.toISOString().slice(0, 10),
-      total_qty: r._sum.total_qty,
-      total_cost: r._sum.total_cost,
+    return rows.map((r) => ({
+      date: this.formatDate(r.date),
+      total_qty: r._sum.total_qty ?? 0,
+      total_cost: r._sum.total_cost ?? 0,
     }));
-    return result;
   }
 
-  // 춝고 차트용
   async outboundDailyTotalAmount(data) {
-    const where = {};
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
+    const where = this.buildDateWhere(data);
 
     const rows = await prisma.outboundDailyStat.groupBy({
       where,
       by: ["date"],
       _sum: {
-        // 갯수 합계
         total_qty: true,
-        // 원가 합계
         total_cost: true,
-        // 판매가 합계
         total_sales: true,
-        // 순익 합계
         total_profit: true,
       },
-      orderBy: { date: "desc" },
+      orderBy: { date: "asc" },
     });
 
-    const result = rows.map((r) => ({
-      ...r,
-      date: r.date.toISOString().slice(0, 10),
-      total_qty: r._sum.total_qty,
-      total_cost: r._sum.total_cost,
-      total_sales: r._sum.total_sales,
-      total_profit: r._sum.total_profit,
+    return rows.map((r) => ({
+      date: this.formatDate(r.date),
+      total_qty: r._sum.total_qty ?? 0,
+      total_cost: r._sum.total_cost ?? 0,
+      total_sales: r._sum.total_sales ?? 0,
+      total_profit: r._sum.total_profit ?? 0,
     }));
-    return result;
   }
 
-  // 재고 차트용
   async stockDailyTotalQty(data) {
-    const where = {};
-    if (data.startDate && data.endDate) {
-      where.date = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
+    const where = this.buildDateWhere(data);
 
     const rows = await prisma.stockDailySnapshot.groupBy({
       where,
@@ -342,15 +323,13 @@ class StatService {
       _sum: {
         quantity: true,
       },
-      orderBy: { date: "desc" },
+      orderBy: { date: "asc" },
     });
 
-    const result = rows.map((r) => ({
-      ...r,
-      date: r.date.toISOString().slice(0, 10),
-      total_qty: r._sum.quantity,
+    return rows.map((r) => ({
+      date: this.formatDate(r.date),
+      total_qty: r._sum.quantity ?? 0,
     }));
-    return result;
   }
 }
 

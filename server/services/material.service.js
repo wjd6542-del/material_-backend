@@ -63,6 +63,35 @@ export default {
       };
     }
 
+    // 카테고리 검색
+    if (data?.category_id) {
+      where.category_id = data.category_id;
+    }
+
+    // 키워드 검색
+    if (data?.keyword) {
+      where.OR = [
+        {
+          name: {
+            contains: data.keyword,
+          },
+        },
+        {
+          memo: {
+            contains: data.keyword,
+          },
+        },
+      ];
+    }
+
+    // 날짜 검색
+    if (data?.startDate && data?.endDate) {
+      where.updated_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
     const rows = await prisma.material.findMany({
       where,
       orderBy: { id: "desc" },
@@ -82,7 +111,6 @@ export default {
         qrcode: await generateQR(row.code),
       })),
     );
-
     return result;
   },
 
@@ -168,6 +196,8 @@ export default {
   },
 
   async save(data, files = [], user) {
+    console.log("파일 정보 확인!!", files);
+
     const uploadDir = path.join(process.cwd(), "uploads");
     await fs.promises.mkdir(uploadDir, { recursive: true });
 
@@ -277,7 +307,7 @@ export default {
       ========================== */
         if (files.length > 0) {
           const currentCount = await tx.materialImage.count({
-            where: { post_id: post.id },
+            where: { material_id: post.id },
           });
 
           const imageRecords = [];
@@ -299,7 +329,7 @@ export default {
               material_id: post.id,
               file_url: `/uploads/${safeName}`,
               file_name: safeName,
-              org_name: file.originalname,
+              org_name: file.originalname || file.filename,
               sort: currentCount + i,
             });
           }

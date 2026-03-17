@@ -40,7 +40,7 @@ export default {
       include: {
         role: true,
       },
-      orderBy: { updated_at: "asc" },
+      orderBy: { updated_at: "desc" },
     });
 
     return rows.map((row) => ({

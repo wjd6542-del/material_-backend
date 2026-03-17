@@ -402,7 +402,7 @@ model AuditLog {
     target_type String?
     target_id   Int?
 
-    description String?
+    description String? @db.Text
 
     before_data Json?
     after_data  Json?

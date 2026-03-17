@@ -12,6 +12,7 @@
         fieldname: part.fieldname,
         buffer,
         filename: part.filename,
+        originalname: part.filename, // 👈 추가
         mimetype: part.mimetype,
       });
     } else {

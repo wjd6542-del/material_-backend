@@ -13,29 +13,29 @@ export default {
     const where = {};
 
     // 재고 존재 여부
-    if (data.in_stock) {
+    if (data?.in_stock) {
       where.quantity = {
         gt: 0, // 0보다 큰 재고만
       };
     }
 
     // 자재 검색
-    if (data.material_id) {
+    if (data?.material_id) {
       where.material_id = data.material_id;
     }
 
     //  창고 검색
-    if (data.warehouse_id) {
+    if (data?.warehouse_id) {
       where.warehouse_id = data.warehouse_id;
     }
 
     //  선반 검색
-    if (data.location_id) {
+    if (data?.location_id) {
       where.location_id = data.location_id;
     }
 
     // 날짜 검색
-    if (data.startDate && data.endDate) {
+    if (data?.startDate && data?.endDate) {
       where.updated_at = {
         gte: new Date(data.startDate),
         lte: new Date(data.endDate),
@@ -78,7 +78,7 @@ export default {
         warehouse: true,
         location: true,
       },
-      orderBy: { updated_at: "asc" },
+      orderBy: { updated_at: "desc" },
     });
 
     return rows.map((row) => ({
@@ -140,7 +140,7 @@ export default {
         warehouse: true,
         location: true,
       },
-      orderBy: { created_at: "asc" },
+      orderBy: { created_at: "desc" },
     });
 
     return rows.map((row) => ({

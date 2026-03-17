@@ -47,6 +47,7 @@ export default {
     };
   },
 
+  // 출고 목록
   async getList(data) {
     const where = {};
 
@@ -69,6 +70,7 @@ export default {
         user: true,
         items: true,
       },
+      orderBy: { created_at: "desc" },
     });
 
     const result = await Promise.all(
@@ -114,6 +116,9 @@ export default {
         material: true,
         warehouse: true,
         location: true,
+      },
+      orderBy: {
+        outbound: { created_at: "desc" },
       },
     });
 

@@ -35,6 +35,7 @@ export default {
         user: true,
         items: true,
       },
+      orderBy: { created_at: "desc" },
     });
 
     const result = await Promise.all(
@@ -89,6 +90,9 @@ export default {
         supplier: true,
         warehouse: true,
         location: true,
+      },
+      orderBy: {
+        inbound: { created_at: "desc" },
       },
     });
 
