@@ -21,10 +21,6 @@ export default async function warehouseRoutes(app) {
     return warehouseService.getById(params.id);
   });
 
-  app.post("/materialList", async (req) => {
-    return warehouseService.materialList(req.body);
-  });
-
   app.post("/delete", async (req) => {
     const params = validate(idParamSchema, req.body);
     return warehouseService.deleteById(params.id);

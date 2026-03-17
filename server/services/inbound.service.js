@@ -117,7 +117,13 @@ export default {
       where: { id },
       include: {
         user: true,
-        items: true,
+        items: {
+          include: {
+            warehouse: true,
+            material: true,
+            location: true,
+          },
+        },
       },
     });
 

@@ -28,58 +28,6 @@ export default {
     });
   },
 
-  // 창고 기준 자재 리스트
-  async materialList() {
-    // 1️⃣ 랙 조회
-    const racks = await prisma.warehouse.findMany({
-      orderBy: { sort: "asc" },
-    });
-
-    // 2️⃣ 재고 groupBy
-    const stocks = await prisma.stock.groupBy({
-      by: ["warehouse_id", "material_id"],
-
-      _sum: {
-        quantity: true,
-      },
-    });
-
-    // 3️⃣ 자재 정보 조회
-    const materials = await prisma.material.findMany({
-      where: {
-        id: { in: stocks.map((v) => v.material_id) },
-      },
-    });
-
-    const materialMap = Object.fromEntries(materials.map((v) => [v.id, v]));
-
-    // 4️⃣ warehouse_id 기준 map 생성
-    const stockMap = {};
-
-    stocks.forEach((v) => {
-      if (!stockMap[v.warehouse_id]) {
-        stockMap[v.warehouse_id] = [];
-      }
-
-      stockMap[v.warehouse_id].push({
-        id: v.material_id,
-        material_name: materialMap[v.material_id]?.name,
-        qty: v._sum.quantity,
-      });
-    });
-
-    // 5️⃣ 랙 구조로 변환
-    return racks.map((rack) => ({
-      id: rack.id,
-      name: rack.name,
-      x: rack.x,
-      y: rack.y,
-      width: rack.width,
-      height: rack.height,
-      stocks: stockMap[rack.id] || [],
-    }));
-  },
-
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 

@@ -50,6 +50,19 @@ export default {
   async getList(data) {
     const where = {};
 
+    if (data?.outbound_no) {
+      where.outbound_no = {
+        contains: data.outbound_no,
+      };
+    }
+
+    if (data?.startDate && data?.endDate) {
+      where.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
     const rows = await prisma.outbound.findMany({
       where,
       include: {
@@ -127,7 +140,13 @@ export default {
       where: { id },
       include: {
         user: true,
-        items: true,
+        items: {
+          include: {
+            warehouse: true,
+            material: true, // 자재
+            location: true, // 위치
+          },
+        },
       },
     });
 

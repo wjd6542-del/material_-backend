@@ -22,8 +22,17 @@ export default async function stockRoutes(app) {
   });
 
   // 히스토리 정보
-
   app.post("/detailList", async (req) => {
     return stockService.getDetailList(req.body);
+  });
+
+  // 창고대비 자재 목록 조회
+  app.post("/warehousStock", async (req) => {
+    return stockService.warehousStock(req.body);
+  });
+
+  // 창고대비 자재 목록 조회
+  app.post("/locationStock", async (req) => {
+    return stockService.locationStock(req.body);
   });
 }
