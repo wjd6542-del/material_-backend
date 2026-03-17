@@ -1,0 +1,30 @@
+{
+	"name": "climb-server",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "node server/index.js",
+		"prisma": "prisma"
+	},
+	"dependencies": {
+		"@fastify/cors": "^9.0.0",
+		"@fastify/helmet": "^13.0.2",
+		"@fastify/multipart": "^7.7.3",
+		"@google-cloud/translate": "^9.3.0",
+		"@prisma/client": "^5.22.0",
+		"axios": "^1.13.5",
+		"bcrypt": "^6.0.0",
+		"dayjs": "^1.11.20",
+		"fastify": "^4.26.0",
+		"jsonwebtoken": "^9.0.3",
+		"node-cron": "^4.2.1",
+		"nodemailer": "^8.0.1",
+		"pump": "^3.0.3",
+		"qrcode": "^1.5.4",
+		"resend": "^6.9.3",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"prisma": "^5.9.0"
+	}
+}

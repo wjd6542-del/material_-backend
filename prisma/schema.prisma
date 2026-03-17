@@ -1,0 +1,540 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////////////
+// ENUM
+//////////////////////////////////////////////////////////////
+
+enum StockType {
+    INBOUND
+    OUTBOUND
+    ADJUST
+}
+
+enum LogAction {
+    CREATE
+    UPDATE
+    DELETE
+    UPSERT
+    CREATEMANY
+    UPSERTMANY
+    DELETEMANY
+    VIEW
+    LOGIN
+    LOGOUT
+}
+
+enum FileTargetType {
+    MATERIAL
+    INBOUND
+    OUTBOUND
+    USER
+}
+
+//////////////////////////////////////////////////////////////
+// 권한 / 사용자
+//////////////////////////////////////////////////////////////
+
+model Role {
+    id          Int     @id @default(autoincrement())
+    name        String  @unique
+    description String?
+    sort        Int     @default(0)
+
+    users User[]
+
+    created_at DateTime @default(now())
+}
+
+model User {
+    id Int @id @default(autoincrement())
+
+    username String @unique @db.VarChar(100)
+    password String @db.VarChar(255)
+
+    name  String  @db.VarChar(100)
+    email String? @db.VarChar(200)
+    code  String? @db.VarChar(15)
+
+    role_id Int
+    role    Role @relation(fields: [role_id], references: [id])
+
+    is_active Boolean @default(true)
+
+    last_login DateTime?
+
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+
+    logs          AuditLog[]
+    inbound       Inbound[]
+    outbound      Outbound[]
+    notifications Notification[]
+}
+
+//////////////////////////////////////////////////////////////
+// 자재
+//////////////////////////////////////////////////////////////
+
+model MaterialCategory {
+    id        Int        @id @default(autoincrement())
+    name      String     @unique
+    code      String     @default("")
+    sort      Int        @default(0)
+    materials Material[]
+}
+
+model Material {
+    id Int @id @default(autoincrement())
+
+    code String @unique @db.VarChar(50)
+    name String @db.VarChar(200)
+
+    category_id Int?
+    category    MaterialCategory? @relation(fields: [category_id], references: [id])
+
+    spec String? @db.VarChar(200)
+    unit String  @db.VarChar(20)
+
+    safety_stock Int @default(0)
+
+    memo String?
+
+    is_active Boolean @default(true)
+
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+    sort       Int      @default(0)
+
+    images MaterialImage[]
+
+    stocks         Stock[]
+    inbound_items  InboundItem[]
+    outbound_items OutboundItem[]
+
+    stockHistories      StockHistory[]
+    stockDailySnapshots StockDailySnapshot[]
+    inboundDailyStats   InboundDailyStat[]
+    outboundDailyStats  OutboundDailyStat[]
+}
+
+model MaterialImage {
+    id Int @id @default(autoincrement())
+
+    material_id Int
+
+    file_url  String
+    file_name String
+    org_name  String
+
+    sort Int @default(0)
+
+    created_at DateTime @default(now())
+
+    material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
+
+    @@index([material_id])
+}
+
+//////////////////////////////////////////////////////////////
+// 공급업체
+//////////////////////////////////////////////////////////////
+
+model Supplier {
+    id Int @id @default(autoincrement())
+
+    name  String
+    phone String?
+    email String?
+    memo  String?
+
+    sort Int @default(0)
+
+    created_at DateTime @default(now())
+
+    inbound_items InboundItem[]
+}
+
+//////////////////////////////////////////////////////////////
+// 창고
+//////////////////////////////////////////////////////////////
+
+model Warehouse {
+    id Int @id @default(autoincrement())
+
+    code String @unique @db.VarChar(50)
+    name String
+
+    memo String?
+
+    x          Int      @default(0)
+    y          Int      @default(0)
+    width      Int      @default(0)
+    height     Int      @default(0)
+    created_at DateTime @default(now())
+    sort       Int      @default(0)
+
+    locations Location[]
+
+    stocks         Stock[]
+    stockHistories StockHistory[]
+
+    inboundItems  InboundItem[]
+    outboundItems OutboundItem[]
+
+    stockDailySnapshots StockDailySnapshot[]
+}
+
+//////////////////////////////////////////////////////////////
+// 위치
+//////////////////////////////////////////////////////////////
+
+model Location {
+    id Int @id @default(autoincrement())
+
+    warehouse_id   Int
+    warehouse      Warehouse      @relation(fields: [warehouse_id], references: [id])
+    code           String         @db.VarChar(50)
+    name           String?
+    sort           Int            @default(0)
+    x              Int            @default(0)
+    y              Int            @default(0)
+    width          Int            @default(0)
+    height         Int            @default(0)
+    created_at     DateTime       @default(now())
+    stocks         Stock[]
+    inboundItems   InboundItem[]
+    outboundItems  OutboundItem[]
+    stockHistories StockHistory[]
+
+    @@unique([warehouse_id, code])
+}
+
+//////////////////////////////////////////////////////////////
+// 재고
+//////////////////////////////////////////////////////////////
+
+model Stock {
+    id Int @id @default(autoincrement())
+
+    material_id  Int
+    warehouse_id Int
+    location_id  Int
+
+    quantity Int @default(0)
+
+    avg_cost    Decimal @default(0) @db.Decimal(15, 2)
+    stock_value Decimal @default(0) @db.Decimal(18, 2)
+
+    updated_at DateTime @updatedAt
+
+    material  Material  @relation(fields: [material_id], references: [id], onDelete: Cascade)
+    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+    location  Location  @relation(fields: [location_id], references: [id])
+
+    histories StockHistory[]
+
+    @@unique([material_id, warehouse_id, location_id])
+}
+
+model StockHistory {
+    id Int @id @default(autoincrement())
+
+    material_id  Int
+    warehouse_id Int
+    stock_id     Int?
+    location_id  Int
+
+    type StockType
+
+    quantity Int
+
+    before_qty Int
+    after_qty  Int
+
+    unit_cost Decimal? @db.Decimal(15, 2)
+    amount    Decimal? @db.Decimal(18, 2)
+
+    ref_table String?
+    ref_id    Int?
+
+    memo String?
+
+    created_at DateTime @default(now())
+
+    material  Material  @relation(fields: [material_id], references: [id])
+    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+    stock     Stock?    @relation(fields: [stock_id], references: [id])
+    location  Location? @relation(fields: [location_id], references: [id])
+
+    @@index([material_id])
+    @@index([warehouse_id])
+}
+
+//////////////////////////////////////////////////////////////
+// 입고
+//////////////////////////////////////////////////////////////
+
+model Inbound {
+    id Int @id @default(autoincrement())
+
+    inbound_no String @unique
+
+    user_id Int
+    user    User @relation(fields: [user_id], references: [id])
+
+    memo String?
+
+    created_at DateTime @default(now())
+
+    items InboundItem[]
+}
+
+model InboundItem {
+    id Int @id @default(autoincrement())
+
+    inbound_id   Int
+    material_id  Int
+    supplier_id  Int?
+    warehouse_id Int
+    location_id  Int
+
+    quantity Int
+
+    unit_price Decimal @db.Decimal(15, 2)
+    amount     Decimal @db.Decimal(18, 2)
+
+    inbound   Inbound   @relation(fields: [inbound_id], references: [id], onDelete: Cascade)
+    material  Material  @relation(fields: [material_id], references: [id])
+    supplier  Supplier? @relation(fields: [supplier_id], references: [id])
+    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+    location  Location  @relation(fields: [location_id], references: [id])
+}
+
+//////////////////////////////////////////////////////////////
+// 출고
+//////////////////////////////////////////////////////////////
+
+model Outbound {
+    id Int @id @default(autoincrement())
+
+    outbound_no String @unique
+
+    user_id Int
+    user    User @relation(fields: [user_id], references: [id])
+
+    memo String?
+
+    created_at DateTime @default(now())
+
+    items OutboundItem[]
+}
+
+model OutboundItem {
+    id Int @id @default(autoincrement())
+
+    outbound_id  Int
+    material_id  Int
+    warehouse_id Int
+    location_id  Int
+
+    quantity Int
+
+    sale_price  Decimal @db.Decimal(15, 2)
+    sale_amount Decimal @db.Decimal(18, 2)
+
+    cost_price  Decimal @db.Decimal(15, 2)
+    cost_amount Decimal @db.Decimal(18, 2)
+
+    profit Decimal @db.Decimal(18, 2)
+
+    outbound  Outbound  @relation(fields: [outbound_id], references: [id], onDelete: Cascade)
+    material  Material  @relation(fields: [material_id], references: [id])
+    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+    location  Location  @relation(fields: [location_id], references: [id])
+}
+
+//////////////////////////////////////////////////////////////
+// 파일 첨부
+//////////////////////////////////////////////////////////////
+
+model Attachment {
+    id Int @id @default(autoincrement())
+
+    target_type FileTargetType
+    target_id   Int
+
+    path     String
+    filename String
+
+    mime_type String?
+    size      Int?
+
+    created_at DateTime @default(now())
+
+    @@index([target_type, target_id])
+}
+
+//////////////////////////////////////////////////////////////
+// 감사 로그
+//////////////////////////////////////////////////////////////
+
+enum LogStatus {
+    SUCCESS
+    FAIL
+}
+
+model AuditLog {
+    id Int @id @default(autoincrement())
+
+    user_id Int?
+    user    User? @relation(fields: [user_id], references: [id])
+
+    page   String
+    action LogAction
+
+    target_type String?
+    target_id   Int?
+
+    description String?
+
+    before_data Json?
+    after_data  Json?
+
+    ip         String?
+    user_agent String?
+
+    status LogStatus @default(SUCCESS)
+
+    created_at DateTime @default(now())
+
+    @@index([user_id])
+}
+
+//////////////////////////////////////////////////////////////
+// 통계
+//////////////////////////////////////////////////////////////
+
+model StockDailySnapshot {
+    id Int @id @default(autoincrement())
+
+    date DateTime @db.Date
+
+    material_id  Int
+    warehouse_id Int
+
+    quantity Int
+
+    material  Material  @relation(fields: [material_id], references: [id])
+    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+
+    @@unique([date, material_id, warehouse_id])
+}
+
+model InboundDailyStat {
+    id Int @id @default(autoincrement())
+
+    date        DateTime @db.Date
+    material_id Int
+
+    total_qty  Int
+    total_cost Decimal @db.Decimal(18, 2)
+
+    material Material @relation(fields: [material_id], references: [id])
+
+    @@unique([date, material_id])
+}
+
+model OutboundDailyStat {
+    id Int @id @default(autoincrement())
+
+    date        DateTime @db.Date
+    material_id Int
+
+    total_qty    Int
+    total_sales  Decimal @db.Decimal(18, 2)
+    total_cost   Decimal @db.Decimal(18, 2)
+    total_profit Decimal @db.Decimal(18, 2)
+
+    material Material @relation(fields: [material_id], references: [id])
+
+    @@unique([date, material_id])
+    @@index([date])
+    @@index([material_id])
+}
+
+//////////////////////////////////////////////////////////////
+// 설정
+//////////////////////////////////////////////////////////////
+
+model Settings {
+    id Int @id @default(autoincrement())
+
+    key  String @db.VarChar(100)
+    text String @db.VarChar(255)
+
+    value String @db.Text
+
+    is_active Boolean @default(true)
+
+    sort Int @default(0)
+
+    created_at DateTime? @default(now())
+    updated_at DateTime? @updatedAt
+
+    @@index([sort])
+}
+
+model Category {
+    id Int @id @default(autoincrement())
+
+    text  String @db.VarChar(255)
+    value String @db.VarChar(255)
+
+    is_active Boolean @default(true)
+
+    sort Int @default(0)
+
+    created_at DateTime? @default(now())
+    updated_at DateTime? @updatedAt
+
+    @@index([sort])
+}
+
+enum NotificationType {
+    INBOUND
+    OUTBOUND
+    MATERIAL
+    SYSTEM
+}
+
+// 알림 테이블
+model Notification {
+    id Int @id @default(autoincrement())
+
+    user_id     Int?
+    user        User?            @relation(fields: [user_id], references: [id])
+    type        NotificationType
+    title       String?
+    message     String?
+    action      String?
+    target_type String?
+    target_id   Int?
+
+    is_read    Boolean   @default(false)
+    read_at    DateTime?
+    created_at DateTime  @default(now())
+
+    @@index([user_id])
+    @@index([is_read])
+}
+
+// 컬럼추가
+// npx prisma migrate dev --name add_material_description 
+// npx prisma generate 모델 동기화

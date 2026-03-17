@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `AuditLog` MODIFY `action` ENUM('CREATE', 'UPDATE', 'DELETE', 'UPSERT', 'VIEW', 'LOGIN', 'LOGOUT') NOT NULL;
