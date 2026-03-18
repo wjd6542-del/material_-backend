@@ -45,11 +45,13 @@ model Role {
     id          Int     @id @default(autoincrement())
     name        String  @unique
     description String?
+    is_super    Boolean @default(false)
     sort        Int     @default(0)
 
     users User[]
 
-    created_at DateTime @default(now())
+    created_at  DateTime         @default(now())
+    permissions RolePermission[]
 }
 
 model User {
@@ -533,6 +535,25 @@ model Notification {
 
     @@index([user_id])
     @@index([is_read])
+}
+
+model Permission {
+    id    Int              @id @default(autoincrement())
+    code  String           @unique // ex: material.read
+    name  String
+    group String // UI 그룹용
+    sort  Int              @default(0)
+    roles RolePermission[]
+}
+
+model RolePermission {
+    id            Int        @id @default(autoincrement())
+    role_id       Int
+    permission_id Int
+    role          Role       @relation(fields: [role_id], references: [id])
+    permission    Permission @relation(fields: [permission_id], references: [id])
+
+    @@unique([role_id, permission_id])
 }
 
 // 컬럼추가

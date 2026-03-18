@@ -18,6 +18,10 @@ export default async function materialRoutes(app) {
     return materialService.getPageList(req.body, req.user);
   });
 
+  app.post("/newMonthMaterial", async (req) => {
+    return materialService.newMonthMaterial(req.body);
+  });
+
   app.post("/:id", async (req) => {
     const params = validate(idParamSchema, req.body);
     return materialService.getById(params.id, req.user);

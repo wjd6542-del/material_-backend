@@ -1,7 +1,62 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
+import { Resend } from "resend";
 
 export default {
+  // 총재고 수량
+  async stockSummary(data) {
+    const count = await prisma.stock.count();
+
+    const qty = await prisma.stock.aggregate({
+      _sum: {
+        quantity: true,
+      },
+    });
+
+    return {
+      count: count,
+      total_qty: qty._sum.quantity,
+    };
+  },
+
+  // 안전재고 미만
+  async getLowStockMaterials(data) {
+    const limit = data?.limit ?? 10;
+
+    const grouped = await prisma.stock.groupBy({
+      by: ["material_id"],
+      _sum: {
+        quantity: true,
+      },
+    });
+
+    const materials = await prisma.material.findMany({
+      select: {
+        id: true,
+        name: true,
+        safety_stock: true,
+      },
+    });
+
+    const result = materials
+      .map((m) => {
+        const stock = grouped.find((g) => g.material_id === m.id);
+
+        const qty = stock?._sum.quantity || 0;
+
+        return {
+          id: m.id,
+          name: m.name,
+          safe_qty: m.safety_stock,
+          qty,
+        };
+      })
+      .filter((row) => row.qty < row.safe_qty) // ✅ 수정
+      .sort((a, b) => a.qty - b.qty)
+      .slice(0, limit);
+    return result;
+  },
+
   async getAllList(data) {
     return prisma.stock.findMany({
       orderBy: { sort: "asc" },

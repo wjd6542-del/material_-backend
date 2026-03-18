@@ -6,6 +6,41 @@ import crypto from "crypto";
 import { generateQR } from "../utils/qrcode.js";
 
 export default {
+  // 이번달 신규 자재 리스트
+  async newMonthMaterial(data) {
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+
+    const take = {};
+    if (data?.limit) {
+      take = limit;
+    }
+
+    const rows = await prisma.material.findMany({
+      where: {
+        created_at: {
+          gte: start,
+          lt: end,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        created_at: true,
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    return rows;
+  },
+
   async getPageList(data) {
     const where = {};
     const page = data.page || 1;

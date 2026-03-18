@@ -12,8 +12,18 @@ export default async function stockRoutes(app) {
     return stockService.getAllList(req.body);
   });
 
+  // 재고 리스트
   app.post("/list", async (req) => {
     return stockService.getList(req.body);
+  });
+
+  app.post("/stockSummary", async (req) => {
+    return stockService.stockSummary(req.body);
+  });
+
+  // 안전재고 부족 자재 리스트
+  app.post("/lowStockMaterials", async (req) => {
+    return stockService.getLowStockMaterials(req.body);
   });
 
   app.post("/:id", async (req) => {
