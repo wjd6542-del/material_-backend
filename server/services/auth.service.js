@@ -133,26 +133,20 @@ export default {
         email,
         role_id: role.id,
       },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true, // 🔥 핵심 (code, action 가져오기)
+              },
+            },
+          },
+        },
+      },
     });
 
-    // 5. JWT 발급
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
-
-    return {
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-      },
-    };
+    return true;
   },
 
   // 회원 비밀번호 수정 처리
