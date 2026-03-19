@@ -7,12 +7,12 @@ export default {
     const where = {};
 
     // 권한검색
-    if (data.user) {
+    if (data?.role_id) {
       where.role_id = data.role_id;
     }
 
     // 권한 검색
-    if (data.keyword) {
+    if (data?.keyword) {
       where.OR = [
         {
           username: {
@@ -28,7 +28,7 @@ export default {
     }
 
     // 날짜 검색
-    if (data.startDate && data.endDate) {
+    if (data?.startDate && data?.endDate) {
       where.updated_at = {
         gte: new Date(data.startDate),
         lte: new Date(data.endDate),
@@ -58,5 +58,15 @@ export default {
       throw new AppError("존재하지 않는 정보입니다.", 404, "NOT_FOUND");
     }
     return item;
+  },
+
+  // 계정권한 설정
+  async setPermission(data) {
+    return await prisma.user.update({
+      where: { id: data.user_id },
+      data: {
+        role_id: data.role_id,
+      },
+    });
   },
 };

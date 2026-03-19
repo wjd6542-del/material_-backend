@@ -4,6 +4,11 @@ export const idParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+export const idPermissionSchema = z.object({
+  user_id: z.coerce.number().int().positive(),
+  role_id: z.coerce.number().int().positive(),
+});
+
 export const saveSchema = z.object({
   id: z.coerce
     .number()

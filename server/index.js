@@ -12,7 +12,7 @@ import errorHandlerPlugin from "./plugins/errorHandler.plugin.js";
 import auditHook from "./plugins/auditHook.js";
 
 // 통계용 자동 크론
-import "./cron/cron.js";
+// import "./cron/cron.js";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });

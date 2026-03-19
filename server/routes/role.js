@@ -5,6 +5,7 @@ import {
   saveSchema,
   batchSaveSchema,
   batchDeleteSchema,
+  permissionSaveSchema,
 } from "../validators/role.schema.js";
 
 export default async function roleRoutes(app) {
@@ -16,7 +17,7 @@ export default async function roleRoutes(app) {
     return roleService.getList(req.body);
   });
 
-  app.get("/:id", async (req) => {
+  app.post("/:id", async (req) => {
     const params = validate(idParamSchema, req.params);
     return roleService.getById(params.id);
   });
@@ -41,5 +42,10 @@ export default async function roleRoutes(app) {
   app.post("/batchDelete", async (req) => {
     const body = validate(batchDeleteSchema, req.body);
     return roleService.batchDelete(body);
+  });
+
+  app.post("/permissionSave", async (req) => {
+    const body = validate(permissionSaveSchema, req.body);
+    return roleService.permissionSave(body);
   });
 }

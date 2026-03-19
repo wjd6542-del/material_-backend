@@ -538,12 +538,13 @@ model Notification {
 }
 
 model Permission {
-    id    Int              @id @default(autoincrement())
-    code  String           @unique // ex: material.read
-    name  String
-    group String // UI 그룹용
-    sort  Int              @default(0)
-    roles RolePermission[]
+    id     Int              @id @default(autoincrement())
+    code   String           @unique // ex: material.read
+    name   String
+    group  String // UI 그룹용
+    action String           @default("")
+    sort   Int              @default(0)
+    roles  RolePermission[]
 }
 
 model RolePermission {

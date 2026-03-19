@@ -24,6 +24,9 @@ export default {
 
     return prisma.role.findMany({
       where,
+      include: {
+        permissions: true,
+      },
       orderBy: { sort: "asc" },
     });
   },
@@ -31,7 +34,12 @@ export default {
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
-    const item = await prisma.role.findUnique({ where: { id } });
+    const item = await prisma.role.findUnique({
+      where: { id },
+      include: {
+        permissions: true,
+      },
+    });
     if (!item) {
       throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
     }
@@ -101,6 +109,30 @@ export default {
     return tx.role.update({
       where: { id: data.id },
       data,
+    });
+  },
+
+  // 메뉴 권한 적용처리
+  async permissionSave(data) {
+    const { role_id, permission_ids } = data;
+
+    return await prisma.$transaction(async (tx) => {
+      // 1. 기존 전부 삭제
+      await tx.rolePermission.deleteMany({
+        where: { role_id },
+      });
+
+      // 2. 최신 권한만 다시 생성
+      if (permission_ids.length) {
+        await tx.rolePermission.createMany({
+          data: permission_ids.map((permission_id) => ({
+            role_id,
+            permission_id,
+          })),
+        });
+      }
+
+      return true;
     });
   },
 };

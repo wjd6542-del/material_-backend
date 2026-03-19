@@ -8,10 +8,24 @@ export default {
   // 로그인
   async login(data) {
     const { username, password } = data;
+
+    // 🔥 사용자 조회 + 권한까지 포함
     const user = await prisma.user.findUnique({
       where: { username },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true, // 🔥 핵심 (code, action 가져오기)
+              },
+            },
+          },
+        },
+      },
     });
 
+    // 사용자 없음
     if (!user) {
       throw new AppError(
         "아이디 또는 비밀번호가 틀렸습니다.",
@@ -20,6 +34,7 @@ export default {
       );
     }
 
+    // 비밀번호 확인
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -30,6 +45,14 @@ export default {
       );
     }
 
+    // 🔥 권한 리스트 가공
+    const permissionList =
+      user.role?.permissions?.map((rp) => rp.permission) || [];
+
+    // 🔥 code 기준 권한 배열 (프론트에서 사용)
+    const permissionCodes = permissionList.map((p) => p.code);
+
+    // 🔥 JWT 생성
     const token = jwt.sign(
       {
         userId: user.id,
@@ -39,13 +62,28 @@ export default {
       { expiresIn: "1d" },
     );
 
-    // 로그인 응답 결과
+    // 🔥 응답
     return {
       token,
+
       user: {
         id: user.id,
         name: user.name,
         username: user.username,
+
+        role: {
+          id: user.role?.id,
+          name: user.role?.name,
+        },
+
+        // 관리자 권한 확인
+        is_super: user.role.is_super,
+
+        // 🔥 핵심 (프론트 권한 체크용)
+        permissions: permissionCodes,
+
+        // 🔥 선택 (디버깅 / UI용)
+        permissionList,
       },
     };
   },

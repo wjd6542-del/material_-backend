@@ -26,10 +26,37 @@ class StatService {
 
   // 조회용 날짜 where 생성
   buildDateWhere(data) {
-    if (!data.startDate || !data.endDate) return {};
+    const now = new Date();
 
-    const start = new Date(`${data.startDate}T00:00:00+09:00`);
-    const end = new Date(`${data.endDate}T23:59:59+09:00`);
+    // 기본값 (오늘)
+    const defaultStart = new Date(now);
+    defaultStart.setHours(0, 0, 0, 0);
+
+    const defaultEnd = new Date(now);
+    defaultEnd.setHours(23, 59, 59, 999);
+
+    let start;
+    let end;
+
+    // startDate 처리
+    if (data.startDate) {
+      start = new Date(data.startDate);
+      if (isNaN(start.getTime())) {
+        start = defaultStart;
+      }
+    } else {
+      start = defaultStart;
+    }
+
+    // endDate 처리
+    if (data.endDate) {
+      end = new Date(data.endDate);
+      if (isNaN(end.getTime())) {
+        end = defaultEnd;
+      }
+    } else {
+      end = defaultEnd;
+    }
 
     return {
       date: {
@@ -306,7 +333,7 @@ class StatService {
     });
 
     return rows.map((r) => ({
-      date: this.formatDate(r.date),
+      date: r.date,
       total_qty: r._sum.total_qty ?? 0,
       total_cost: r._sum.total_cost ?? 0,
       total_sales: r._sum.total_sales ?? 0,

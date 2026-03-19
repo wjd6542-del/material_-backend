@@ -4,6 +4,12 @@ export const idParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+// 계정에 메뉴 권한설정
+export const permissionSaveSchema = z.object({
+  role_id: z.coerce.number().int().positive(),
+  permission_ids: z.array(z.number().int()).default([]),
+});
+
 export const saveSchema = z.object({
   id: z.coerce
     .number()
