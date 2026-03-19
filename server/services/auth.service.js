@@ -95,12 +95,23 @@ export default {
     // 2. 중복 체크
     const existUser = await prisma.user.findFirst({
       where: {
-        OR: [{ username }, { email }],
+        username,
       },
     });
 
     if (existUser) {
       throw new AppError("중복된 유저입니다.", 400, "INVALID_USER");
+    }
+
+    // 2. 중복 체크
+    const existEmail = await prisma.user.findFirst({
+      where: {
+        email,
+      },
+    });
+
+    if (existEmail) {
+      throw new AppError("중복된 이메일 입니다.", 400, "INVALID_USER");
     }
 
     // USER 권한 조회
