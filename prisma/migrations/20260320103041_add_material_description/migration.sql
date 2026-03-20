@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `StockHistory` MODIFY `type` ENUM('INBOUND', 'OUTBOUND', 'RETURNORDER', 'ADJUST') NOT NULL;
