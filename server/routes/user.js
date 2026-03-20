@@ -22,4 +22,19 @@ export default async function userRoutes(app) {
     const body = validate(idPermissionSchema, req.body);
     return userService.setPermission(body);
   });
+
+  // 계정 아이피 리스트
+  app.post("/ip/list", async (req) => {
+    return userService.getUserIpList(req.body);
+  });
+
+  // 계정 아이피 저장 처리
+  app.post("/ip/batchSave", async (req) => {
+    return userService.batchIpSave(req.body);
+  });
+
+  // 아이피 일괄 삭제
+  app.post("/ip/batchDelete", async (req) => {
+    return userService.batchIpDelete(req.body);
+  });
 }

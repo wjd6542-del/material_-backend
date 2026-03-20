@@ -55,8 +55,14 @@ export default {
     // 🔥 JWT 생성
     const token = jwt.sign(
       {
+        // 회원 키
         userId: user.id,
+        // 회원 아이디
         username: user.username,
+        // 권한 배열
+        permissions: permissionCodes,
+        // 관리자 권한 확인처리
+        is_super: user.role.is_super,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1d" },

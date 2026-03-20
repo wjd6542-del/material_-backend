@@ -15,6 +15,7 @@ export const saveSchema = z.object({
   name: z.string().trim().min(1, "text는 1자 이상 입력해주세요"),
   code: z.string().trim(),
   group: z.string().trim(),
+  action: z.string().trim(),
   sort: z.coerce.number().optional(),
 });
 

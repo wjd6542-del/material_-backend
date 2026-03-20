@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Notification` MODIFY `type` ENUM('INBOUND', 'OUTBOUND', 'MATERIAL', 'RETURNORDER', 'SYSTEM') NOT NULL;

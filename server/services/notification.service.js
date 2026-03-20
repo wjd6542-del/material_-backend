@@ -7,11 +7,11 @@ export default {
     const where = {};
 
     // 타입별 리스트 출력
-    if (data.type) {
+    if (data?.type) {
       where.type = data.type;
     }
 
-    if (data.action) {
+    if (data?.action) {
       where.action = data.action;
     }
 

@@ -67,17 +67,19 @@ model User {
     role_id Int
     role    Role @relation(fields: [role_id], references: [id])
 
-    is_active Boolean @default(true)
+    is_active   Boolean @default(true)
+    ip_restrict Boolean @default(false) // 🔥 핵심
 
     last_login DateTime?
 
     created_at DateTime @default(now())
     updated_at DateTime @updatedAt
 
-    logs          AuditLog[]
-    inbound       Inbound[]
-    outbound      Outbound[]
-    notifications Notification[]
+    logs             AuditLog[]
+    inbound          Inbound[]
+    outbound         Outbound[]
+    notifications    Notification[]
+    userIpWhitelists UserIpWhitelist[]
 }
 
 //////////////////////////////////////////////////////////////
@@ -335,7 +337,8 @@ model Outbound {
 
     created_at DateTime @default(now())
 
-    items OutboundItem[]
+    items        OutboundItem[]
+    returnOrders ReturnOrder[]
 }
 
 model OutboundItem {
@@ -513,6 +516,7 @@ enum NotificationType {
     INBOUND
     OUTBOUND
     MATERIAL
+    RETURNORDER
     SYSTEM
 }
 
@@ -555,6 +559,65 @@ model RolePermission {
     permission    Permission @relation(fields: [permission_id], references: [id])
 
     @@unique([role_id, permission_id])
+}
+
+model UserIpWhitelist {
+    id        Int     @id @default(autoincrement())
+    user_id   Int
+    ip        String // IPv4 / IPv6
+    memo      String?
+    is_active Boolean @default(true)
+
+    user User @relation(fields: [user_id], references: [id])
+
+    created_at DateTime @default(now())
+
+    @@unique([user_id, ip])
+    @@index([user_id])
+}
+
+// 반품 마스터 (ReturnOrder)
+model ReturnOrder {
+    id         Int    @id @default(autoincrement())
+    returnNo   String @unique @map("return_no") // 예: RET-20240522-001
+    outboundId Int?   @map("outbound_id")
+
+    // 관계 설정: 어느 출고건에 대한 반품인지 (Optional)
+    outbound    Outbound?    @relation(fields: [outboundId], references: [id])
+    status      ReturnStatus @default(REQUESTED)
+    totalAmount Float        @default(0) @map("total_amount")
+    memo        String?      @db.Text
+
+    items ReturnOrderItem[] // 상세 품목들
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("return_orders")
+}
+
+// 반품 상세 품목 (ReturnOrderItem)
+model ReturnOrderItem {
+    id             Int         @id @default(autoincrement())
+    returnOrder_id Int
+    returnOrder    ReturnOrder @relation(fields: [returnOrder_id], references: [id], onDelete: Cascade)
+
+    material_id Int
+    quantity    Int // 반품 수량
+    unit_price  Float @map("unit_price") // 반품 당시 단가
+
+    reasonType  String @map("reason_type") // 단순변심, 파손 등
+    stockStatus String @default("READY") @map("stock_status") // READY, RESTOCKED, SCRAPPED
+
+    @@map("return_order_items")
+}
+
+// 상태값 관리를 위한 Enum (DB가 지원하는 경우)
+enum ReturnStatus {
+    REQUESTED // 반품 요청
+    INSPECTING // 검수 중
+    COMPLETED // 완료 (재고 반영됨)
+    REJECTED // 거부
 }
 
 // 컬럼추가
