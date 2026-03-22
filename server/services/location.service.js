@@ -18,6 +18,9 @@ export default {
 
     return prisma.location.findMany({
       where,
+      include: {
+        warehouse: true,
+      },
       orderBy: { sort: "asc" },
     });
   },

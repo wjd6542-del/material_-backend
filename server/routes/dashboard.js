@@ -5,7 +5,7 @@ export default async function dashboardRoutes(app) {
   app.post(
     "/dashboard",
     {
-      preHandler: permission("dashboard.view"),
+      //preHandler: permission("dashboard.view"),
     },
     async (req) => {
       return dashboardService.getDashboard(req.body);
