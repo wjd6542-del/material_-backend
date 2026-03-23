@@ -66,7 +66,7 @@ export default {
         is_super: user.role.is_super,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" },
+      { expiresIn: "3h" },
     );
 
     // 🔥 응답

@@ -30,4 +30,9 @@ export default async function notificationRoutes(app) {
   app.post("/batchDelete", async (req) => {
     return notificationService.batchDelete(req.body, req.user);
   });
+
+  // 일괄 읽음 처리
+  app.post("/batchRead", async (req) => {
+    return notificationService.batchRead(req.body, req.user);
+  });
 }

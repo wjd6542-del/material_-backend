@@ -108,6 +108,26 @@ class StatService {
     }));
   }
 
+  // 반품 리스트
+  async returnList(data) {
+    const where = {
+      ...this.buildDateWhere(data),
+      ...(data.material_id && { material_id: data.material_id }),
+    };
+
+    const rows = await prisma.returnDailyStat.findMany({
+      where,
+      include: { material: true },
+      orderBy: { date: "desc" },
+    });
+
+    return rows.map((r) => ({
+      ...r,
+      date: this.formatDate(r.date),
+      material_name: r.material?.name ?? "",
+    }));
+  }
+
   async stockList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -250,6 +270,75 @@ class StatService {
   }
 
   // ==============================
+  // 반품 일별 통계 (🔥 수정 완료)
+  // ==============================
+  async createReturnDailyStat(date = null) {
+    console.log("check >> ", date);
+
+    const { start, end, target } = this.getDateRange(date);
+
+    console.log("check > ", "1111111111");
+    console.log("secrh > ", start, end);
+
+    const rows = await prisma.returnOrderItem.groupBy({
+      by: ["material_id"],
+      _sum: {
+        quantity: true,
+        sale_amount: true,
+        cost_amount: true,
+        profit: true,
+      },
+      where: {
+        returnOrder: {
+          created_at: {
+            gte: start,
+            lte: end,
+          },
+        },
+      },
+    });
+
+    console.log("check > ", "2222222222");
+
+    console.log("check > ", rows);
+
+    if (!rows.length) {
+      return { type: "return", count: 0 };
+    }
+
+    await Promise.all(
+      rows.map((r) =>
+        prisma.returnDailyStat.upsert({
+          where: {
+            date_material_id: {
+              date: target,
+              material_id: r.material_id,
+            },
+          },
+          update: {
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_sales: Number(r._sum.sale_amount ?? 0),
+            total_cost: Number(r._sum.cost_amount ?? 0),
+            total_profit: Number(r._sum.profit ?? 0),
+          },
+          create: {
+            date: target,
+            material_id: r.material_id,
+            total_qty: Number(r._sum.quantity ?? 0),
+            total_sales: Number(r._sum.sale_amount ?? 0),
+            total_cost: Number(r._sum.cost_amount ?? 0),
+            total_profit: Number(r._sum.profit ?? 0),
+          },
+        }),
+      ),
+    );
+
+    return {
+      type: "return",
+      count: rows.length,
+    };
+  }
+  // ==============================
   // 재고 스냅샷
   // ==============================
 
@@ -317,10 +406,36 @@ class StatService {
     }));
   }
 
+  // 출고 차트
   async outboundDailyTotalAmount(data) {
     const where = this.buildDateWhere(data);
 
     const rows = await prisma.outboundDailyStat.groupBy({
+      where,
+      by: ["date"],
+      _sum: {
+        total_qty: true,
+        total_cost: true,
+        total_sales: true,
+        total_profit: true,
+      },
+      orderBy: { date: "asc" },
+    });
+
+    return rows.map((r) => ({
+      date: this.formatDate(r.date),
+      total_qty: r._sum.total_qty ?? 0,
+      total_cost: r._sum.total_cost ?? 0,
+      total_sales: r._sum.total_sales ?? 0,
+      total_profit: r._sum.total_profit ?? 0,
+    }));
+  }
+
+  // 반품 차트
+  async returnDailyTotalAmount(data) {
+    const where = this.buildDateWhere(data);
+
+    const rows = await prisma.returnDailyStat.groupBy({
       where,
       by: ["date"],
       _sum: {

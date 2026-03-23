@@ -131,6 +131,7 @@ model Material {
     inboundDailyStats   InboundDailyStat[]
     outboundDailyStats  OutboundDailyStat[]
     returnOrderItems    ReturnOrderItem[]
+    returnDailyStats    ReturnDailyStat[]
 }
 
 model MaterialImage {
@@ -463,6 +464,25 @@ model InboundDailyStat {
 }
 
 model OutboundDailyStat {
+    id Int @id @default(autoincrement())
+
+    date        DateTime @db.Date
+    material_id Int
+
+    total_qty    Int
+    total_sales  Decimal @db.Decimal(18, 2)
+    total_cost   Decimal @db.Decimal(18, 2)
+    total_profit Decimal @db.Decimal(18, 2)
+
+    material Material @relation(fields: [material_id], references: [id])
+
+    @@unique([date, material_id])
+    @@index([date])
+    @@index([material_id])
+}
+
+// 반품 통계 테이블
+model ReturnDailyStat {
     id Int @id @default(autoincrement())
 
     date        DateTime @db.Date

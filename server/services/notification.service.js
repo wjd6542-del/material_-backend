@@ -113,4 +113,24 @@ export default {
     );
     return results;
   },
+
+  // 일괄 읽기 처리
+  async batchRead(data = [], user) {
+    if (!data.length) {
+      throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
+    }
+
+    const results = await Promise.all(
+      data.map((row, idx) =>
+        this.read(row, user).catch(() => {
+          throw new AppError(
+            `${idx + 1} 번째 데이터 읽기 실패`,
+            400,
+            "BATCH_DELETE_FAILED",
+          );
+        }),
+      ),
+    );
+    return results;
+  },
 };
