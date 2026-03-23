@@ -333,7 +333,7 @@ class StatService {
     });
 
     return rows.map((r) => ({
-      date: r.date,
+      date: this.formatDate(r.date),
       total_qty: r._sum.total_qty ?? 0,
       total_cost: r._sum.total_cost ?? 0,
       total_sales: r._sum.total_sales ?? 0,

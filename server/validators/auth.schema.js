@@ -46,19 +46,31 @@ export const saveSchema = z
 // 비밀번호 변경
 export const changePassword = z
   .object({
-    username: z.string().min(1, "아이디를 입력하세요"),
-    password: z
+    old_password: z
       .string()
-      .min(6, "비밀번호는 6자리 이상입니다")
+      .min(6, "기존 비밀번호는 6자리 이상입니다")
       .regex(/^[A-Za-z0-9]+$/, "비밀번호는 영문과 숫자만 가능합니다")
       .refine((val) => /[A-Za-z]/.test(val) && /\d/.test(val), {
         message: "비밀번호는 영문 + 숫자 조합이어야 합니다",
       }),
-    passwordConfirm: z.string().min(6, "비밀번호 확인을 입력하세요"),
+    new_password: z
+      .string()
+      .min(6, "신규 비밀번호는 6자리 이상입니다")
+      .regex(/^[A-Za-z0-9]+$/, "비밀번호는 영문과 숫자만 가능합니다")
+      .refine((val) => /[A-Za-z]/.test(val) && /\d/.test(val), {
+        message: "비밀번호는 영문 + 숫자 조합이어야 합니다",
+      }),
+    new_confirm_password: z
+      .string()
+      .min(6, "비밀번호 확인은 6자리 이상입니다")
+      .regex(/^[A-Za-z0-9]+$/, "비밀번호는 영문과 숫자만 가능합니다")
+      .refine((val) => /[A-Za-z]/.test(val) && /\d/.test(val), {
+        message: "비밀번호는 영문 + 숫자 조합이어야 합니다",
+      }),
   })
-  .refine((data) => data.password === data.passwordConfirm, {
+  .refine((data) => data.new_password === data.new_confirm_password, {
     message: "비밀번호가 일치하지 않습니다",
-    path: ["passwordConfirm"],
+    path: ["new_confirm_password"],
   });
 
 // 비밀번호 찾기

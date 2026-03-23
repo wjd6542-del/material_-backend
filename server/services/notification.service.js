@@ -6,6 +6,10 @@ export default {
   async getList(data, user) {
     const where = {};
 
+    if (data?.id) {
+      where.id = Number(data.id);
+    }
+
     // 타입별 리스트 출력
     if (data?.type) {
       where.type = data.type;

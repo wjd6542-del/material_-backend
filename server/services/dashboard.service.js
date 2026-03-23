@@ -3,9 +3,16 @@ import dayjs from "dayjs";
 
 export default {
   async getDashboard() {
+    // 🔥 오늘
     const todayStart = dayjs().startOf("day").toDate();
     const todayEnd = dayjs().endOf("day").toDate();
+
+    // 🔥 최근 30일
     const thirtyDaysAgo = dayjs().subtract(30, "day").startOf("day").toDate();
+
+    // 🔥 이번달
+    const monthStart = dayjs().startOf("month").toDate();
+    const monthEnd = dayjs().endOf("month").toDate();
 
     const [
       todayInbound,
@@ -17,6 +24,10 @@ export default {
       topStock,
       lowStockRaw,
       logs,
+
+      // 🔥 이번달 통계 (DailyStat 기반)
+      monthInboundStat,
+      monthOutboundStat,
     ] = await prisma.$transaction([
       /*
         오늘 입고
@@ -71,7 +82,7 @@ export default {
       }),
 
       /*
-        입고 차트
+        입고 차트 (30일)
       */
       prisma.inboundDailyStat.groupBy({
         by: ["date"],
@@ -87,7 +98,7 @@ export default {
       }),
 
       /*
-        출고 차트
+        출고 차트 (30일)
       */
       prisma.outboundDailyStat.groupBy({
         by: ["date"],
@@ -136,10 +147,40 @@ export default {
           user: true,
         },
       }),
+
+      /*
+        🔥 이번달 입고 (지출)
+      */
+      prisma.inboundDailyStat.aggregate({
+        _sum: {
+          total_cost: true, // 🔥 입고 금액
+        },
+        where: {
+          date: {
+            gte: monthStart,
+            lte: monthEnd,
+          },
+        },
+      }),
+
+      /*
+        🔥 이번달 출고 (수익)
+      */
+      prisma.outboundDailyStat.aggregate({
+        _sum: {
+          total_sales: true, // 🔥 매출
+        },
+        where: {
+          date: {
+            gte: monthStart,
+            lte: monthEnd,
+          },
+        },
+      }),
     ]);
 
     /*
-      부족 재고 필터 (컬럼 비교)
+      부족 재고 필터
     */
     const lowStock = lowStockRaw
       .filter((v) => v.quantity < v.material.safety_stock)
@@ -150,12 +191,24 @@ export default {
         safety_stock: v.material.safety_stock,
       }));
 
+    /*
+      🔥 이번달 계산 (통계 기반)
+    */
+    const totalMonthExpense = monthInboundStat._sum.total_cost ?? 0;
+    const totalMonthSales = monthOutboundStat._sum.total_sales ?? 0;
+    const netProfit = totalMonthSales - totalMonthExpense;
+
     return {
       summary: {
         today_inbound: todayInbound._sum.quantity ?? 0,
         today_outbound: todayOutbound._sum.quantity ?? 0,
         total_stock: totalStock._sum.quantity ?? 0,
         today_sales: todaySales._sum.sale_amount ?? 0,
+
+        // 🔥 통계 기반
+        month_sales: totalMonthSales,
+        month_expense: totalMonthExpense,
+        month_profit: netProfit,
       },
 
       inbound_chart: inboundChartRaw.map((v) => ({

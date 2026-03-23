@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
-import { Resend } from "resend";
+import { generateQR } from "../utils/qrcode.js";
 
 export default {
   // 총재고 수량
@@ -136,14 +136,19 @@ export default {
       orderBy: { updated_at: "desc" },
     });
 
-    return rows.map((row) => ({
-      ...row,
-      material_code: row.material?.code ?? "",
-      material_name: row.material?.name ?? "",
-      warehouse_name: row.warehouse?.name ?? "",
-      location_name: row.location?.name ?? "",
-      location_code: row.location?.code ?? "",
-    }));
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.material?.code),
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location_name: row.location?.name ?? "",
+        location_code: row.location?.code ?? "",
+      })),
+    );
+
+    return result;
   },
 
   async getById(id) {
@@ -198,14 +203,19 @@ export default {
       orderBy: { created_at: "desc" },
     });
 
-    return rows.map((row) => ({
-      ...row,
-      material_code: row.material?.code ?? "",
-      material_name: row.material?.name ?? "",
-      warehouse_name: row.warehouse?.name ?? "",
-      location_name: row.location?.name ?? "",
-      location_code: row.location?.code ?? "",
-    }));
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.material?.code),
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location_name: row.location?.name ?? "",
+        location_code: row.location?.code ?? "",
+      })),
+    );
+
+    return result;
   },
 
   // 창고 기준 자재 리스트
@@ -328,5 +338,153 @@ export default {
 
       stocks: stockMap[loc.id] || [],
     }));
+  },
+
+  // 재고 이동 처리
+  // 재고 이동 처리
+  async transfer(data, user) {
+    const { material_id, from_location_id, to_location_id, quantity } = data;
+
+    if (!material_id) throw new Error("자재 없음");
+    if (!from_location_id) throw new Error("출발 위치 없음");
+    if (!to_location_id) throw new Error("도착 위치 없음");
+    if (from_location_id === to_location_id) {
+      throw new Error("같은 위치 이동 불가");
+    }
+    if (quantity <= 0) throw new Error("수량 오류");
+
+    return await prisma.$transaction(async (tx) => {
+      // 🔥 0. location → warehouse 추출
+      const [fromLocation, toLocation] = await Promise.all([
+        tx.location.findUnique({ where: { id: from_location_id } }),
+        tx.location.findUnique({ where: { id: to_location_id } }),
+      ]);
+
+      if (!fromLocation || !toLocation) {
+        throw new Error("위치 정보 없음");
+      }
+
+      const fromWarehouseId = fromLocation.warehouse_id;
+      const toWarehouseId = toLocation.warehouse_id;
+
+      // 🔥 1. 출발 재고 조회
+      const fromStock = await tx.stock.findUnique({
+        where: {
+          material_id_warehouse_id_location_id: {
+            material_id,
+            warehouse_id: fromWarehouseId,
+            location_id: from_location_id,
+          },
+        },
+        include: {
+          material: true,
+          location: true,
+        },
+      });
+
+      if (!fromStock) {
+        throw new Error("출발 재고 없음");
+      }
+
+      if (fromStock.quantity < quantity) {
+        throw new Error("재고 부족");
+      }
+
+      const fromBefore = fromStock.quantity;
+
+      // 🔥 2. 출발지 차감
+      await tx.stock.update({
+        where: { id: fromStock.id },
+        data: {
+          quantity: { decrement: quantity },
+        },
+      });
+
+      // 🔥 3. 도착 재고 조회
+      const toStock = await tx.stock.findUnique({
+        where: {
+          material_id_warehouse_id_location_id: {
+            material_id,
+            warehouse_id: toWarehouseId,
+            location_id: to_location_id,
+          },
+        },
+        include: {
+          location: true,
+        },
+      });
+
+      let toBefore = 0;
+      let toStockId = null;
+
+      // 🔥 4. 도착지 증가 or 생성
+      if (toStock) {
+        toBefore = toStock.quantity;
+        toStockId = toStock.id;
+
+        await tx.stock.update({
+          where: { id: toStock.id },
+          data: {
+            quantity: { increment: quantity },
+          },
+        });
+      } else {
+        const created = await tx.stock.create({
+          data: {
+            material_id,
+            warehouse_id: toWarehouseId,
+            location_id: to_location_id,
+            quantity,
+          },
+        });
+
+        toStockId = created.id;
+      }
+
+      // 🔥 5. 이력 기록 (OUT)
+      await tx.stockHistory.create({
+        data: {
+          material_id,
+          warehouse_id: fromWarehouseId,
+          location_id: from_location_id,
+          stock_id: fromStock.id,
+          type: "TRANSFER_OUT",
+          quantity,
+          before_qty: fromBefore,
+          after_qty: fromBefore - quantity,
+        },
+      });
+
+      // 🔥 6. 이력 기록 (IN)
+      await tx.stockHistory.create({
+        data: {
+          material_id,
+          warehouse_id: toWarehouseId,
+          location_id: to_location_id,
+          stock_id: toStockId,
+          type: "TRANSFER_IN",
+          quantity,
+          before_qty: toBefore,
+          after_qty: toBefore + quantity,
+        },
+      });
+
+      // 🔥 7. 알림
+      const materialName = fromStock.material?.name || "자재";
+
+      await tx.notification.create({
+        data: {
+          user_id: user.id,
+          type: "STOCK",
+          title: "재고 이동",
+          action: "MOVE",
+          message: `${materialName} ${quantity}개 이동 (${fromLocation.name} → ${toLocation.name})`,
+          target_type: "stock",
+          target_id: fromStock.id,
+        },
+      });
+
+      return true;
+    });
   },
 };

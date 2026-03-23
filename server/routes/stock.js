@@ -5,6 +5,7 @@ import {
   saveSchema,
   batchSaveSchema,
   batchDeleteSchema,
+  transferSchema,
 } from "../validators/stock.schema.js";
 
 export default async function stockRoutes(app) {
@@ -44,5 +45,11 @@ export default async function stockRoutes(app) {
   // 창고대비 자재 목록 조회
   app.post("/locationStock", async (req) => {
     return stockService.locationStock(req.body);
+  });
+
+  // 재고 이동 처리
+  app.post("/transfer", async (req) => {
+    const body = validate(transferSchema, req.body);
+    return stockService.transfer(body, req.user);
   });
 }

@@ -55,6 +55,7 @@ export default {
     // 🔥 JWT 생성
     const token = jwt.sign(
       {
+        id: user.id,
         // 회원 키
         userId: user.id,
         // 회원 아이디
@@ -156,22 +157,46 @@ export default {
   },
 
   // 회원 비밀번호 수정 처리
+  // 회원 비밀번호 수정 처리
   async changePassword(userId, data) {
-    const { password } = data;
+    const { old_password, new_password } = data;
 
-    const hash = await bcrypt.hash(password, 10);
+    // 1. 유저 존재 여부 및 기존 비밀번호 조회를 위해 유저 정보 가져오기
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
 
+    if (!user) {
+      throw new AppError("존재하지 않는 유저입니다.", 404, "USER_NOT_FOUND");
+    }
+
+    // 2. 입력받은 기존 비밀번호(old_password)와 DB의 해시값 비교
+    const isMatch = await bcrypt.compare(old_password, user.password);
+    if (!isMatch) {
+      throw new AppError(
+        "기존 비밀번호가 일치하지 않습니다.",
+        401,
+        "INVALID_PASSWORD",
+      );
+    }
+
+    // 3. 새로운 비밀번호 해싱
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(new_password, saltRounds);
+
+    // 4. DB 업데이트
     try {
       await prisma.user.update({
-        where: {
-          id: userId,
-        },
-        data: {
-          password: hash,
-        },
+        where: { id: userId },
+        data: { password: hashedNewPassword },
       });
     } catch (error) {
-      throw new AppError("존재하지 않는 유저 입니다.", 400, "INVALID_USER");
+      // 업데이트 과정에서 발생할 수 있는 DB 에러 처리
+      throw new AppError(
+        "비밀번호 변경 중 오류가 발생했습니다.",
+        500,
+        "UPDATE_FAILED",
+      );
     }
 
     return true;
