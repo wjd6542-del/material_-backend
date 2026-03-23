@@ -284,10 +284,9 @@ export default {
       orderBy: { sort: "asc" },
     });
 
-    // 👉 location id 목록 추출
     const locationIds = locations.map((v) => v.id);
 
-    // 2️⃣ 재고 groupBy (선반 기준 + 창고 필터 적용)
+    // 2️⃣ 재고 groupBy
     const stocks = await prisma.stock.groupBy({
       by: ["location_id", "material_id"],
       where: {
@@ -300,16 +299,33 @@ export default {
       },
     });
 
-    // 3️⃣ 자재 정보 조회
+    const materialIds = stocks.map((v) => v.material_id);
+
+    // 3️⃣ 자재 + 이미지 조회 (🔥 여기 수정)
     const materials = await prisma.material.findMany({
       where: {
-        id: { in: stocks.map((v) => v.material_id) },
+        id: { in: materialIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        images: {
+          select: {
+            id: true,
+            file_url: true,
+            file_name: true,
+          },
+          orderBy: {
+            sort: "asc",
+          },
+          take: 1, // 대표 이미지 1개
+        },
       },
     });
 
     const materialMap = Object.fromEntries(materials.map((v) => [v.id, v]));
 
-    // 4️⃣ location_id 기준 map 생성
+    // 4️⃣ stock map
     const stockMap = {};
 
     stocks.forEach((v) => {
@@ -317,14 +333,21 @@ export default {
         stockMap[v.location_id] = [];
       }
 
+      const material = materialMap[v.material_id];
+      const image = material?.images?.[0];
+
       stockMap[v.location_id].push({
         id: v.material_id,
-        material_name: materialMap[v.material_id]?.name,
+        material_name: material?.name,
         qty: v._sum.quantity,
+
+        // ✅ 실제 필드 기준
+        image: image || null,
+        image_url: image?.file_url || null,
       });
     });
 
-    // 5️⃣ 선반 구조로 변환
+    // 5️⃣ 반환
     return locations.map((loc) => ({
       id: loc.id,
       name: loc.name,

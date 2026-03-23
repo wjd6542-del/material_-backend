@@ -16,12 +16,13 @@ export default async function returnorderRoutes(app) {
     return returnorderService.getList(req.body);
   });
 
-  app.post("/boardCount", async (req) => {
-    return returnorderService.boardCount(req.body);
+  // 상세 페이지 리스트
+  app.post("/detail/list", async (req) => {
+    return returnorderService.getDetailList(req.body);
   });
 
-  app.post("/detail/list", async (req) => {
-    return returnorderService.detailList(req.body);
+  app.post("/boardCount", async (req) => {
+    return returnorderService.boardCount(req.body);
   });
 
   app.post("/:id", async (req) => {

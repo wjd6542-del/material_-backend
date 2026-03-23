@@ -104,6 +104,69 @@ export default {
     return result;
   },
 
+  // 상세 페이지 조회
+  async getDetailList(data) {
+    const where = {};
+
+    if (data?.return_no) {
+      where.return_no = { contains: data.return_no };
+    }
+
+    if (data?.material_id) {
+      where.material_id = data.material_id;
+    }
+
+    if (data?.warehouse_id) {
+      where.warehouse_id = data.warehouse_id;
+    }
+
+    if (data?.location_id) {
+      where.location_id = data.location_id;
+    }
+
+    if (data?.status) {
+      where.status = data.status;
+    }
+
+    if (data.startDate && data.endDate) {
+      where.returnOrder = {
+        created_at: {
+          gte: new Date(data.startDate),
+          lte: new Date(data.endDate),
+        },
+      };
+    }
+
+    const rows = await prisma.returnOrderItem.findMany({
+      where,
+      include: {
+        material: true,
+        location: true,
+        warehouse: true,
+        returnOrder: true,
+      },
+      orderBy: {
+        returnOrder: { created_at: "desc" },
+      },
+    });
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+
+        qrcode: await generateQR(row.returnOrder.return_no),
+        return_no: row.returnOrder.return_no,
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location: row.location?.code ?? "",
+        created_at: row.returnOrder?.created_at ?? "",
+      })),
+    );
+
+    return result;
+  },
+
   // 상세 데이터 단건 조회
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400);
