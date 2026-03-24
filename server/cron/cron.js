@@ -11,33 +11,37 @@ const jobs = [
     name: "출고 일별 통계",
     fn: () => StatService.createOutboundDailyStat(),
   },
+  {
+    name: "반품 일별 통계",
+    fn: () => StatService.createReturnDailyStat(),
+  },
 ];
 
 // 매일 00:10 실행 (서버 타임존 기준: Asia/Seoul)
 cron.schedule(
-    "10 0 * * *",
-    async () => {
-      console.log("===== Daily Stat Start =====");
+  "10 0 * * *",
+  async () => {
+    console.log("===== Daily Stat Start =====");
 
-      try {
-        await StatService.createStockDailyStat();
+    try {
+      await StatService.createStockDailyStat();
 
-        for (const job of jobs) {
-          try {
-            console.log(`${job.name} Start`);
-            await job.fn();
-            console.log(`${job.name} Done`);
-          } catch (err) {
-            console.error(`${job.name} Error`, err);
-          }
+      for (const job of jobs) {
+        try {
+          console.log(`${job.name} Start`);
+          await job.fn();
+          console.log(`${job.name} Done`);
+        } catch (err) {
+          console.error(`${job.name} Error`, err);
         }
-      } catch (err) {
-        console.error("Stock Daily Stat Error", err);
       }
+    } catch (err) {
+      console.error("Stock Daily Stat Error", err);
+    }
 
-      console.log("===== Daily Stat End =====");
-    },
-    {
-      timezone: "Asia/Seoul",
-    },
+    console.log("===== Daily Stat End =====");
+  },
+  {
+    timezone: "Asia/Seoul",
+  },
 );
