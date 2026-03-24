@@ -24,10 +24,14 @@ export default {
       topStock,
       lowStockRaw,
       logs,
-
-      // 🔥 이번달 통계 (DailyStat 기반)
       monthInboundStat,
       monthOutboundStat,
+
+      // 추가처리
+      // 오늘 반품 총 카운트
+      // 오늘 재고이동 카운트
+      todayReturn,
+      totaltransfer,
     ] = await prisma.$transaction([
       /*
         오늘 입고
@@ -177,6 +181,30 @@ export default {
           },
         },
       }),
+
+      // 오늘 반품
+      prisma.returnOrderItem.aggregate({
+        _sum: { quantity: true },
+        where: {
+          returnOrder: {
+            created_at: {
+              gte: todayStart,
+              lte: todayEnd,
+            },
+          },
+        },
+      }),
+
+      // 오늘 재고이동
+      prisma.stockHistory.count({
+        where: {
+          type: "TRANSFER_OUT", // 🔥 이동 타입
+          created_at: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+      }),
     ]);
 
     /*
@@ -200,12 +228,20 @@ export default {
 
     return {
       summary: {
+        // 입고 수량
         today_inbound: todayInbound._sum.quantity ?? 0,
+        // 출고 수량
         today_outbound: todayOutbound._sum.quantity ?? 0,
+        // 재고 수량
         total_stock: totalStock._sum.quantity ?? 0,
+        // 판매금액
         today_sales: todaySales._sum.sale_amount ?? 0,
+        // 오늘 재고이동
+        today_transfers: totaltransfer ?? 0,
+        // 오늘 반품 수량
+        today_returns: todayReturn._sum.quantity ?? 0,
 
-        // 🔥 통계 기반
+        // 이번달 통계
         month_sales: totalMonthSales,
         month_expense: totalMonthExpense,
         month_profit: netProfit,

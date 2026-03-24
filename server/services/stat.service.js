@@ -175,7 +175,7 @@ class StatService {
     });
 
     if (!rows.length) {
-      throw new AppError("조회된 결과가 없습니다.", "NO_DATA");
+      return { type: "inbound", count: 0 };
     }
 
     await Promise.all(
@@ -273,12 +273,7 @@ class StatService {
   // 반품 일별 통계 (🔥 수정 완료)
   // ==============================
   async createReturnDailyStat(date = null) {
-    console.log("check >> ", date);
-
     const { start, end, target } = this.getDateRange(date);
-
-    console.log("check > ", "1111111111");
-    console.log("secrh > ", start, end);
 
     const rows = await prisma.returnOrderItem.groupBy({
       by: ["material_id"],
@@ -297,10 +292,6 @@ class StatService {
         },
       },
     });
-
-    console.log("check > ", "2222222222");
-
-    console.log("check > ", rows);
 
     if (!rows.length) {
       return { type: "return", count: 0 };
