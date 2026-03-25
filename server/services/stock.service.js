@@ -235,9 +235,25 @@ export default {
     });
 
     // 3️⃣ 자재 정보 조회
+
     const materials = await prisma.material.findMany({
       where: {
         id: { in: stocks.map((v) => v.material_id) },
+      },
+      select: {
+        id: true,
+        name: true,
+        images: {
+          select: {
+            id: true,
+            file_url: true,
+            file_name: true,
+          },
+          orderBy: {
+            sort: "asc",
+          },
+          take: 1, // 대표 이미지 1개
+        },
       },
     });
 
@@ -251,10 +267,16 @@ export default {
         stockMap[v.warehouse_id] = [];
       }
 
+      const material = materialMap[v.material_id];
+      const image = material?.images?.[0];
+
       stockMap[v.warehouse_id].push({
         id: v.material_id,
         material_name: materialMap[v.material_id]?.name,
         qty: v._sum.quantity,
+        // ✅ 실제 필드 기준
+        image: image || null,
+        image_url: image?.file_url || null,
       });
     });
 
