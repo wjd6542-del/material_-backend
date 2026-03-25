@@ -1,5 +1,6 @@
 ﻿import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
+import dayjs from "dayjs";
 
 class StatService {
   // ==============================
@@ -154,9 +155,19 @@ class StatService {
   // ==============================
   // 입고 일별 통계
   // ==============================
-
   async createInboundDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
+
+    const startDate = dayjs(target).startOf("day").toDate();
+    const endDate = dayjs(target).endOf("day").toDate();
+
+    const targetDate = new Date(
+      Date.UTC(
+        dayjs(target).year(),
+        dayjs(target).month(),
+        dayjs(target).date(),
+      ),
+    );
 
     const rows = await prisma.inboundItem.groupBy({
       by: ["material_id"],
@@ -167,8 +178,8 @@ class StatService {
       where: {
         inbound: {
           created_at: {
-            gte: start,
-            lte: end,
+            gte: startDate,
+            lte: endDate,
           },
         },
       },
@@ -178,29 +189,22 @@ class StatService {
       return { type: "inbound", count: 0 };
     }
 
-    await Promise.all(
-      rows.map((r) =>
-        prisma.inboundDailyStat.upsert({
-          where: {
-            date_material_id: {
-              date: target,
-              material_id: r.material_id,
-            },
-          },
-          update: {
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_cost: Number(r._sum.amount ?? 0),
-          },
-          create: {
-            date: target,
-            material_id: r.material_id,
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_cost: Number(r._sum.amount ?? 0),
-          },
-        }),
-      ),
-    );
+    await prisma.$transaction(async (tx) => {
+      await tx.inboundDailyStat.deleteMany({
+        where: {
+          date: targetDate,
+        },
+      });
 
+      await tx.inboundDailyStat.createMany({
+        data: rows.map((r) => ({
+          date: targetDate,
+          material_id: r.material_id,
+          total_qty: Number(r._sum.quantity ?? 0),
+          total_cost: Number(r._sum.amount ?? 0),
+        })),
+      });
+    });
     return {
       type: "inbound",
       count: rows.length,
@@ -208,11 +212,20 @@ class StatService {
   }
 
   // ==============================
-  // 출고 일별 통계 (🔥 수정 완료)
+  // 출고 일별 통계
   // ==============================
-
   async createOutboundDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
+    const startDate = dayjs(target).startOf("day").toDate();
+    const endDate = dayjs(target).endOf("day").toDate();
+
+    const targetDate = new Date(
+      Date.UTC(
+        dayjs(target).year(),
+        dayjs(target).month(),
+        dayjs(target).date(),
+      ),
+    );
 
     const rows = await prisma.outboundItem.groupBy({
       by: ["material_id"],
@@ -225,8 +238,8 @@ class StatService {
       where: {
         outbound: {
           created_at: {
-            gte: start,
-            lte: end,
+            gte: startDate,
+            lte: endDate,
           },
         },
       },
@@ -236,32 +249,22 @@ class StatService {
       return { type: "outbound", count: 0 };
     }
 
-    await Promise.all(
-      rows.map((r) =>
-        prisma.outboundDailyStat.upsert({
-          where: {
-            date_material_id: {
-              date: target,
-              material_id: r.material_id,
-            },
-          },
-          update: {
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_sales: Number(r._sum.sale_amount ?? 0),
-            total_cost: Number(r._sum.cost_amount ?? 0),
-            total_profit: Number(r._sum.profit ?? 0),
-          },
-          create: {
-            date: target,
-            material_id: r.material_id,
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_sales: Number(r._sum.sale_amount ?? 0),
-            total_cost: Number(r._sum.cost_amount ?? 0),
-            total_profit: Number(r._sum.profit ?? 0),
-          },
-        }),
-      ),
-    );
+    // 🔥 기존 데이터 삭제
+    await prisma.outboundDailyStat.deleteMany({
+      where: { date: targetDate },
+    });
+
+    // 🔥 재생성
+    await prisma.outboundDailyStat.createMany({
+      data: rows.map((r) => ({
+        date: targetDate,
+        material_id: r.material_id,
+        total_qty: Number(r._sum.quantity ?? 0),
+        total_sales: Number(r._sum.sale_amount ?? 0),
+        total_cost: Number(r._sum.cost_amount ?? 0),
+        total_profit: Number(r._sum.profit ?? 0),
+      })),
+    });
 
     return {
       type: "outbound",
@@ -270,10 +273,21 @@ class StatService {
   }
 
   // ==============================
-  // 반품 일별 통계 (🔥 수정 완료)
+  // 반품 일별 통계
   // ==============================
   async createReturnDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
+
+    const startDate = dayjs(target).startOf("day").toDate();
+    const endDate = dayjs(target).endOf("day").toDate();
+
+    const targetDate = new Date(
+      Date.UTC(
+        dayjs(target).year(),
+        dayjs(target).month(),
+        dayjs(target).date(),
+      ),
+    );
 
     const rows = await prisma.returnOrderItem.groupBy({
       by: ["material_id"],
@@ -286,8 +300,8 @@ class StatService {
       where: {
         returnOrder: {
           created_at: {
-            gte: start,
-            lte: end,
+            gte: startDate,
+            lte: endDate,
           },
         },
       },
@@ -297,75 +311,70 @@ class StatService {
       return { type: "return", count: 0 };
     }
 
-    await Promise.all(
-      rows.map((r) =>
-        prisma.returnDailyStat.upsert({
-          where: {
-            date_material_id: {
-              date: target,
-              material_id: r.material_id,
-            },
-          },
-          update: {
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_sales: Number(r._sum.sale_amount ?? 0),
-            total_cost: Number(r._sum.cost_amount ?? 0),
-            total_profit: Number(r._sum.profit ?? 0),
-          },
-          create: {
-            date: target,
-            material_id: r.material_id,
-            total_qty: Number(r._sum.quantity ?? 0),
-            total_sales: Number(r._sum.sale_amount ?? 0),
-            total_cost: Number(r._sum.cost_amount ?? 0),
-            total_profit: Number(r._sum.profit ?? 0),
-          },
-        }),
-      ),
-    );
+    // 🔥 기존 데이터 삭제
+    await prisma.returnDailyStat.deleteMany({
+      where: { date: targetDate },
+    });
+
+    // 🔥 재생성
+    await prisma.returnDailyStat.createMany({
+      data: rows.map((r) => ({
+        date: targetDate,
+        material_id: r.material_id,
+        total_qty: Number(r._sum.quantity ?? 0),
+        total_sales: Number(r._sum.sale_amount ?? 0),
+        total_cost: Number(r._sum.cost_amount ?? 0),
+        total_profit: Number(r._sum.profit ?? 0),
+      })),
+    });
 
     return {
       type: "return",
       count: rows.length,
     };
   }
+
   // ==============================
   // 재고 스냅샷
   // ==============================
-
   async createStockDailyStat(date = null) {
     const { target } = this.getDateRange(date);
 
-    const stocks = await prisma.stock.findMany({
-      select: {
-        material_id: true,
-        warehouse_id: true,
+    // 🔥 날짜 UTC 고정 (DATE 컬럼 대응)
+    const targetDate = new Date(
+      Date.UTC(
+        dayjs(target).year(),
+        dayjs(target).month(),
+        dayjs(target).date(),
+      ),
+    );
+
+    // 🔥 location 제거 → warehouse 단위 합산
+    const stocks = await prisma.stock.groupBy({
+      by: ["material_id", "warehouse_id"],
+      _sum: {
         quantity: true,
       },
     });
 
-    await Promise.all(
-      stocks.map((s) =>
-        prisma.stockDailySnapshot.upsert({
-          where: {
-            date_material_id_warehouse_id: {
-              date: target,
-              material_id: s.material_id,
-              warehouse_id: s.warehouse_id,
-            },
-          },
-          update: {
-            quantity: s.quantity,
-          },
-          create: {
-            date: target,
-            material_id: s.material_id,
-            warehouse_id: s.warehouse_id,
-            quantity: s.quantity,
-          },
-        }),
-      ),
-    );
+    if (!stocks.length) {
+      return { type: "stock", count: 0 };
+    }
+
+    // 🔥 기존 데이터 삭제 (해당 날짜 전체 초기화)
+    await prisma.stockDailySnapshot.deleteMany({
+      where: { date: targetDate },
+    });
+
+    // 🔥 재생성 (중복 없음 보장)
+    await prisma.stockDailySnapshot.createMany({
+      data: stocks.map((s) => ({
+        date: targetDate,
+        material_id: s.material_id,
+        warehouse_id: s.warehouse_id,
+        quantity: s._sum.quantity || 0,
+      })),
+    });
 
     return {
       type: "stock",

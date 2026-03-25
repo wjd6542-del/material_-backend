@@ -157,4 +157,27 @@ export default {
   async PermissionGrop(data) {
     const { user_id } = data;
   },
+
+  // 회원 계정 아이피 토글 여부
+  async ipToggle(data) {
+    if (!data.user_id) {
+      new AppError("회원 정보가 없습니다", 400, "NOT_FOUND");
+    }
+
+    if (!data.ip_restrict) {
+      new AppError("활성정보가 없습니다", 400, "NOT_FOUND");
+    }
+
+    // 업데이트 진행
+    const result = await prisma.user.update({
+      where: {
+        id: Number(data.user_id),
+      },
+      data: {
+        ip_restrict: data.ip_restrict,
+      },
+    });
+
+    return result;
+  },
 };

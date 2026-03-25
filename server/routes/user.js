@@ -37,4 +37,9 @@ export default async function userRoutes(app) {
   app.post("/ip/batchDelete", async (req) => {
     return userService.batchIpDelete(req.body);
   });
+
+  // 계정 아이피 적용활성화 수정여부
+  app.post("/ip/toggle", async (req) => {
+    return userService.ipToggle(req.body);
+  });
 }

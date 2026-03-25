@@ -15,7 +15,11 @@ import auditHook from "./plugins/auditHook.js";
 // import "./cron/cron.js";
 
 const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });
+await app.register(cors, {
+  // origin: "https://honors-slides-ceo-addresses.trycloudflare.com",
+  origin: true,
+  credentials: true,
+});
 await app.register(errorHandlerPlugin);
 await app.register(multipart, {
   limits: {
