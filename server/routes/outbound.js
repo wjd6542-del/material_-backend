@@ -24,6 +24,11 @@ export default async function outboundRoutes(app) {
     return outboundService.detailList(req.body);
   });
 
+  // 반품 확인 목록 조회
+  app.post("/returnList", async (req) => {
+    return outboundService.returnList(req.body);
+  });
+
   app.post("/:id", async (req) => {
     const params = validate(idParamSchema, req.params);
     return outboundService.getById(params.id);

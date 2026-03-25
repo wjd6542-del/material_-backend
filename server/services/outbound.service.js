@@ -138,6 +138,79 @@ export default {
     return result;
   },
 
+  // 반품 리스트
+  async returnList(data) {
+    const where = {};
+
+    if (data?.material_id) {
+      where.material_id = data.material_id;
+    }
+
+    // 자재명, 자재코드 검색
+    if (data?.searchText) {
+      const materials = await prisma.material.findMany({
+        where: {
+          OR: [
+            {
+              name: {
+                contains: data.searchText,
+              },
+            },
+            {
+              code: {
+                contains: data.searchText,
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      where.material_id = {
+        in: materials.map((m) => m.id),
+      };
+    }
+
+    if (data?.startDate && data?.endDate) {
+      where.outbound = {
+        created_at: {
+          gte: new Date(data.startDate),
+          lte: new Date(data.endDate),
+        },
+      };
+    }
+
+    const rows = await prisma.outboundItem.findMany({
+      where,
+      include: {
+        outbound: true,
+        material: true,
+        warehouse: true,
+        location: true,
+      },
+      orderBy: {
+        outbound: { created_at: "desc" },
+      },
+    });
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        outbound_code: row.outbound?.outbound_no ?? "",
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location: row.location?.code ?? "",
+        created_at: row.outbound?.created_at ?? "",
+        qrcode: await generateQR(row.outbound.outbound_no),
+      })),
+    );
+
+    return result;
+  },
+
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400);
 
