@@ -185,6 +185,34 @@ export default {
       where.type = data.type;
     }
 
+    // 검색 기준 적용
+    // 자재명, 자재코드 검색
+    if (data?.searchText) {
+      const materials = await prisma.material.findMany({
+        where: {
+          OR: [
+            {
+              name: {
+                contains: data.searchText,
+              },
+            },
+            {
+              code: {
+                contains: data.searchText,
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      where.material_id = {
+        in: materials.map((m) => m.id),
+      };
+    }
+
     // 날짜 검색
     if (data.startDate && data.endDate) {
       where.created_at = {
