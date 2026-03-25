@@ -19,19 +19,16 @@ export default {
       todayOutbound,
       todaySales,
       totalStock,
+      todayReturn,
+      totaltransfer,
       inboundChartRaw,
       outboundChartRaw,
+      returnChartRaw,
       topStock,
       lowStockRaw,
       logs,
       monthInboundStat,
       monthOutboundStat,
-
-      // 추가처리
-      // 오늘 반품 총 카운트
-      // 오늘 재고이동 카운트
-      todayReturn,
-      totaltransfer,
     ] = await prisma.$transaction([
       /*
         오늘 입고
@@ -85,6 +82,30 @@ export default {
         _sum: { quantity: true },
       }),
 
+      // 오늘 반품
+      prisma.returnOrderItem.aggregate({
+        _sum: { quantity: true },
+        where: {
+          returnOrder: {
+            created_at: {
+              gte: todayStart,
+              lte: todayEnd,
+            },
+          },
+        },
+      }),
+
+      // 오늘 재고이동
+      prisma.stockHistory.count({
+        where: {
+          type: "TRANSFER_OUT", // 🔥 이동 타입
+          created_at: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+      }),
+
       /*
         입고 차트 (30일)
       */
@@ -105,6 +126,22 @@ export default {
         출고 차트 (30일)
       */
       prisma.outboundDailyStat.groupBy({
+        by: ["date"],
+        where: {
+          date: { gte: thirtyDaysAgo },
+        },
+        _sum: {
+          total_qty: true,
+        },
+        orderBy: {
+          date: "asc",
+        },
+      }),
+
+      /*
+        반품 차트 (30일)
+      */
+      prisma.returnDailyStat.groupBy({
         by: ["date"],
         where: {
           date: { gte: thirtyDaysAgo },
@@ -181,43 +218,29 @@ export default {
           },
         },
       }),
-
-      // 오늘 반품
-      prisma.returnOrderItem.aggregate({
-        _sum: { quantity: true },
-        where: {
-          returnOrder: {
-            created_at: {
-              gte: todayStart,
-              lte: todayEnd,
-            },
-          },
-        },
-      }),
-
-      // 오늘 재고이동
-      prisma.stockHistory.count({
-        where: {
-          type: "TRANSFER_OUT", // 🔥 이동 타입
-          created_at: {
-            gte: todayStart,
-            lte: todayEnd,
-          },
-        },
-      }),
     ]);
 
     /*
       부족 재고 필터
     */
-    const lowStock = lowStockRaw
-      .filter((v) => v.quantity < v.material.safety_stock)
-      .map((v) => ({
-        material_id: v.material_id,
-        material_name: v.material.name,
-        stock: v.quantity,
-        safety_stock: v.material.safety_stock,
-      }));
+    const grouped = {};
+
+    for (const v of lowStockRaw) {
+      if (!grouped[v.material_id]) {
+        grouped[v.material_id] = {
+          material_id: v.material_id,
+          material_name: v.material.name,
+          safety_stock: v.material.safety_stock,
+          stock: 0,
+        };
+      }
+
+      grouped[v.material_id].stock += v.quantity;
+    }
+
+    const lowStock = Object.values(grouped).filter(
+      (v) => v.stock < v.safety_stock,
+    );
 
     /*
       🔥 이번달 계산 (통계 기반)
@@ -253,6 +276,11 @@ export default {
       })),
 
       outbound_chart: outboundChartRaw.map((v) => ({
+        date: dayjs(v.date).format("MM-DD"),
+        qty: v._sum.total_qty ?? 0,
+      })),
+
+      return_chart: returnChartRaw.map((v) => ({
         date: dayjs(v.date).format("MM-DD"),
         qty: v._sum.total_qty ?? 0,
       })),
