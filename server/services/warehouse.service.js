@@ -24,6 +24,10 @@ export default {
 
     return prisma.warehouse.findMany({
       where,
+      include: {
+        locations: true,
+        stocks: true,
+      },
       orderBy: { sort: "asc" },
     });
   },

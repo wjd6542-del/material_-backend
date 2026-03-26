@@ -6,7 +6,7 @@ import { sendMail } from "../lib/mail.js";
 
 export default {
   // 로그인
-  async login(data) {
+  async login(data, ip) {
     const { username, password } = data;
 
     // 🔥 사용자 조회 + 권한까지 포함
@@ -32,6 +32,21 @@ export default {
         400,
         "INVALID_USER",
       );
+    }
+
+    // 🔥 IP 제한 체크
+    if (user.ip_restrict && !user.role.is_super) {
+      const allow = await prisma.userIpWhitelist.findFirst({
+        where: {
+          user_id: user.id,
+          ip: ip,
+          is_active: true,
+        },
+      });
+
+      if (!allow) {
+        throw new AppError("허용되지 않은 IP 입니다.", 403, "IP_BLOCKED");
+      }
     }
 
     // 비밀번호 확인
@@ -64,6 +79,8 @@ export default {
         permissions: permissionCodes,
         // 관리자 권한 확인처리
         is_super: user.role.is_super,
+        // 아이피 필터링 여부 채크
+        ip_restrict: user.ip_restrict,
       },
       process.env.JWT_SECRET,
       { expiresIn: "3h" },

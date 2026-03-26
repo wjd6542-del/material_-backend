@@ -15,6 +15,22 @@ import auditHook from "./plugins/auditHook.js";
 // import "./cron/cron.js";
 
 const app = Fastify({ logger: true });
+
+function getClientIp(req) {
+  let ip =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    "";
+
+  // 🔥 IPv6 → IPv4 변환 (::ffff:127.0.0.1)
+  if (ip.includes("::ffff:")) {
+    ip = ip.replace("::ffff:", "");
+  }
+
+  return ip;
+}
+
 await app.register(cors, {
   // origin: "https://honors-slides-ceo-addresses.trycloudflare.com",
   origin: true,
@@ -29,32 +45,58 @@ await app.register(multipart, {
 });
 
 // ----------------------------
-// ✅ 전역 헤더 검사
+// ✅ 전역 헤더 검사 + IP 제한
 // ----------------------------
 app.addHook("onRequest", async (request, reply) => {
   const apiKey = request.headers["x-api-key"];
 
-  if (request.url.startsWith("/api/")) {
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
+  if (!request.url.startsWith("/api/")) return;
 
-    const authHeader = request.headers.authorization;
+  // 1️⃣ API KEY 체크
+  if (!apiKey || apiKey !== process.env.API_KEY) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
 
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
+  const authHeader = request.headers.authorization;
 
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  // 🔥 토큰 없는 경우는 그냥 통과 (로그인 API 등)
+  if (!authHeader) return;
 
-        request.user = {
-          id: decoded.userId,
-          username: decoded.username,
-        };
-      } catch (err) {
-        return reply.code(401).send({ error: "Invalid token" });
+  const token = authHeader.replace("Bearer ", "");
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 🔥 request.user 확장 (나중에 계속 쓰니까 여기서 세팅)
+    request.user = {
+      id: decoded.userId,
+      username: decoded.username,
+      is_super: decoded.is_super,
+      ip_restrict: decoded.ip_restrict,
+    };
+
+    // ----------------------------
+    // 🔥 IP 제한 체크
+    // ----------------------------
+    if (decoded.ip_restrict && !decoded.is_super) {
+      const ip = getClientIp(request);
+
+      const allow = await prisma.userIpWhitelist.findFirst({
+        where: {
+          user_id: decoded.userId,
+          ip: ip,
+          is_active: true,
+        },
+      });
+
+      if (!allow) {
+        return reply.code(403).send({
+          error: "허용되지 않은 IP 입니다.",
+        });
       }
     }
+  } catch (err) {
+    return reply.code(401).send({ error: "Invalid token" });
   }
 });
 
