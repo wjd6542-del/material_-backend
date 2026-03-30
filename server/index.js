@@ -81,6 +81,8 @@ app.addHook("onRequest", async (request, reply) => {
     if (decoded.ip_restrict && !decoded.is_super) {
       const ip = getClientIp(request);
 
+      console.log("check >> ", ip);
+
       const allow = await prisma.userIpWhitelist.findFirst({
         where: {
           user_id: decoded.userId,

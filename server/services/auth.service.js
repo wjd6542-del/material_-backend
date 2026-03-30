@@ -5,6 +5,11 @@ import jwt from "jsonwebtoken";
 import { sendMail } from "../lib/mail.js";
 
 export default {
+  // 랜덤 6자리 코드
+  generateCode() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  },
+
   // 로그인
   async login(data, ip) {
     const { username, password } = data;
@@ -35,7 +40,7 @@ export default {
     }
 
     // 🔥 IP 제한 체크
-    if (user.ip_restrict && !user.role.is_super) {
+    if (user.ip_restrict) {
       const allow = await prisma.userIpWhitelist.findFirst({
         where: {
           user_id: user.id,
@@ -174,7 +179,6 @@ export default {
   },
 
   // 회원 비밀번호 수정 처리
-  // 회원 비밀번호 수정 처리
   async changePassword(userId, data) {
     const { old_password, new_password } = data;
 
@@ -222,7 +226,8 @@ export default {
   // 이메일 인증 코드
   async sendCode(data) {
     const { email } = data;
-    const timestamp = Date.now();
+
+    const timestamp = this.generateCode();
 
     const user = await prisma.user.findFirst({
       where: { email },
