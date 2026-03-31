@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
+import bcrypt from "bcrypt";
 
 export default {
   // 필터링 적용 리스트
@@ -179,5 +180,68 @@ export default {
     });
 
     return result;
+  },
+
+  // 신규 등록
+  async create(data) {
+    const { name, username, email, password, role_id, is_active } = data;
+
+    // 2. 중복 체크
+    const existUser = await prisma.user.findFirst({
+      where: {
+        username,
+      },
+    });
+
+    if (existUser) {
+      throw new AppError("중복된 유저입니다.", 400, "INVALID_USER");
+    }
+
+    // 2. 중복 체크
+    const existEmail = await prisma.user.findFirst({
+      where: {
+        email,
+      },
+    });
+
+    if (existEmail) {
+      throw new AppError("중복된 이메일 입니다.", 400, "INVALID_USER");
+    }
+
+    // 3. 비밀번호 암호화
+    const hash = await bcrypt.hash(password, 10);
+
+    // 4. 회원 저장
+    await prisma.user.create({
+      data: {
+        username,
+        password: hash,
+        name,
+        email,
+        role_id,
+        is_active,
+      },
+    });
+
+    return true;
+  },
+
+  // 수정처리
+  async update(data) {
+    const { name, username, email, role_id, is_active } = data;
+
+    // 4. 회원 저장
+    await prisma.user.update({
+      where: { id: data.id },
+      data: {
+        username,
+        name,
+        email,
+        role_id,
+        is_active,
+      },
+    });
+
+    return true;
   },
 };

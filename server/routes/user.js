@@ -3,6 +3,8 @@ import { validate } from "../plugins/validator.plugin.js";
 import {
   idParamSchema,
   idPermissionSchema,
+  createSchema,
+  updateSchema,
 } from "../validators/user.schema.js";
 
 export default async function userRoutes(app) {
@@ -41,5 +43,17 @@ export default async function userRoutes(app) {
   // 계정 아이피 적용활성화 수정여부
   app.post("/ip/toggle", async (req) => {
     return userService.ipToggle(req.body);
+  });
+
+  // 계정 신규 등록
+  app.post("/create", async (req) => {
+    const body = validate(createSchema, req.body);
+    return userService.create(body);
+  });
+
+  // 계정 업데이트
+  app.post("/update", async (req) => {
+    const body = validate(updateSchema, req.body);
+    return userService.update(body);
   });
 }
