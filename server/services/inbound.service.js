@@ -140,7 +140,6 @@ export default {
 
   // 재고 처리
   async updateStock(tx, item, diffQty, refTable, refId) {
-    console.log("아이템 체크!!", item);
     const stock = await tx.stock.findUnique({
       where: {
         material_id_warehouse_id_location_id: {

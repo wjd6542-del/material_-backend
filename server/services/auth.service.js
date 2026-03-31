@@ -253,8 +253,6 @@ export default {
 	  <p>인증코드 : ${timestamp}</p>
     `,
     });
-
-    console.log("응답 결과 확인!!");
     return true;
   },
 

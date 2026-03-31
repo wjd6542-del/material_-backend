@@ -27,7 +27,6 @@ export default async function authnRoutes(app) {
 
   // 등록
   app.post("/signup", async (req) => {
-    console.log("data check ", req.body);
     const body = validate(saveSchema, req.body);
     return authService.signup(body);
   });

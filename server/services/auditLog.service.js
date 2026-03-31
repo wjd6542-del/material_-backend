@@ -38,8 +38,6 @@ export default {
       where.action = data.action;
     }
 
-    console.log("where  ", where);
-
     return prisma.auditLog.findMany({
       where,
       orderBy: { created_at: "desc" },

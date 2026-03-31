@@ -231,8 +231,6 @@ export default {
   },
 
   async save(data, files = [], user) {
-    console.log("파일 정보 확인!!", files);
-
     const uploadDir = path.join(process.cwd(), "uploads");
     await fs.promises.mkdir(uploadDir, { recursive: true });
 

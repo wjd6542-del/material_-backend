@@ -271,6 +271,7 @@ export default {
       select: {
         id: true,
         name: true,
+        code: true,
         images: {
           select: {
             id: true,
@@ -300,9 +301,14 @@ export default {
 
       stockMap[v.warehouse_id].push({
         id: v.material_id,
+        // 자제명
         material_name: materialMap[v.material_id]?.name,
+        // 자제코드
+        material_code: materialMap[v.material_id]?.code,
+        // 수량
         qty: v._sum.quantity,
-        // ✅ 실제 필드 기준
+
+        // 자재 이미지
         image: image || null,
         image_url: image?.file_url || null,
       });
@@ -359,6 +365,7 @@ export default {
       select: {
         id: true,
         name: true,
+        code: true,
         images: {
           select: {
             id: true,
@@ -388,10 +395,14 @@ export default {
 
       stockMap[v.location_id].push({
         id: v.material_id,
+        // 자제명
         material_name: material?.name,
+        // 자제코드
+        material_code: material?.code,
+        // 수량
         qty: v._sum.quantity,
 
-        // ✅ 실제 필드 기준
+        // 자재 이미지
         image: image || null,
         image_url: image?.file_url || null,
       });
