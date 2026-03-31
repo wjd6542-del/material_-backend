@@ -59,7 +59,6 @@ export default {
     const rows = await prisma.notification.groupBy({
       by: ["type"],
       where: {
-        user_id: user.id,
         is_read: false,
       },
       _count: {
@@ -71,6 +70,7 @@ export default {
       INBOUND: 0,
       OUTBOUND: 0,
       MATERIAL: 0,
+      RETURNORDER: 0,
     };
 
     rows.forEach((r) => {
