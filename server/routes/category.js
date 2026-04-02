@@ -2,7 +2,6 @@ import categoryService from "../services/category.service.js";
 import { validate } from "../plugins/validator.plugin.js";
 import {
   idParamSchema,
-  saveSchema,
   batchSaveSchema,
   batchDeleteSchema,
 } from "../validators/category.schema.js";
@@ -10,6 +9,10 @@ import {
 export default async function categoryRoutes(app) {
   app.post("/allList", async (req) => {
     return categoryService.getAllList(req.body);
+  });
+
+  app.post("/getCategoryTree", async () => {
+    return categoryService.getCategoryTree();
   });
 
   app.post("/list", async (req) => {
@@ -31,8 +34,8 @@ export default async function categoryRoutes(app) {
   });
 
   app.post("/save", async (req) => {
-    const body = validate(saveSchema, req.body);
-    return categoryService.save(body);
+    const body = validate(batchSaveSchema, req.body);
+    return categoryService.batchSave(body);
   });
 
   // 일괄 저장

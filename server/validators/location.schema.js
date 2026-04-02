@@ -5,22 +5,15 @@ export const idParamSchema = z.object({
 });
 
 export const saveSchema = z.object({
-  id: z.coerce
-    .number()
-    .optional()
-    .transform((val) => {
-      if (val === undefined) return undefined;
-      return val < 0 ? 0 : val;
-    }),
+  id: z.coerce.number().int().nullable().optional(),
   warehouse_id: z.coerce.number().optional(),
   code: z.string().trim(),
   name: z.string().trim(),
-  x: z.coerce.number(),
-  y: z.coerce.number(),
-  width: z.coerce.number(),
-  height: z.coerce.number(),
-
-  sort: z.coerce.number().optional(),
+  //memo: z.string().trim().nullable().optional(),
+  sort: z.coerce.number().int().default(0),
+  points: z.array(z.any()).nullable().optional(),
+  rotation: z.coerce.number().default(0),
+  color: z.string().trim().nullable().optional(),
 });
 
 export const batchSaveSchema = z
@@ -28,5 +21,5 @@ export const batchSaveSchema = z
   .min(1, "저장할 데이터가 없습니다.");
 
 export const batchDeleteSchema = z
-  .array(saveSchema)
+  .array(idParamSchema)
   .min(1, "삭제할 데이터가 없습니다.");

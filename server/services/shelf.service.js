@@ -3,7 +3,7 @@ import AppError from "../errors/AppError.js";
 
 export default {
   async getAllList(data) {
-    return prisma.location.findMany({
+    return prisma.shelf.findMany({
       orderBy: { sort: "asc" },
     });
   },
@@ -12,14 +12,14 @@ export default {
   async getList(data) {
     const where = {};
 
-    if (data?.warehouse_id) {
-      where.warehouse_id = Number(data.warehouse_id);
+    if (data?.location_id) {
+      where.location_id = Number(data.location_id);
     }
 
-    return prisma.location.findMany({
+    return prisma.shelf.findMany({
       where,
       include: {
-        warehouse: true,
+        location: true,
       },
       orderBy: { sort: "asc" },
     });
@@ -28,22 +28,16 @@ export default {
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
-    const item = await prisma.location.findUnique({ where: { id } });
+    const item = await prisma.shelf.findUnique({ where: { id } });
     if (!item) {
-      throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
+      throw new AppError("존재하지 않는 선반입니다.", 404, "NOT_FOUND");
     }
     return item;
   },
 
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
-
-    await prisma.$transaction(async (tx) => {
-      await tx.shelf.deleteMany({ where: { location_id: id } });
-      await tx.location.delete({ where: { id } });
-    });
-
-    return true;
+    return prisma.shelf.delete({ where: { id } });
   },
 
   /**
@@ -98,10 +92,10 @@ export default {
       const createData = { ...data };
       delete createData.id;
 
-      return tx.location.create({ data: createData });
+      return tx.shelf.create({ data: createData });
     }
 
-    return tx.location.update({
+    return tx.shelf.update({
       where: { id: data.id },
       data,
     });
