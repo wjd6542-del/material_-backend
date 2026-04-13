@@ -139,7 +139,7 @@ export default {
   },
 
   // 재고 처리
-  async updateStock(tx, item, diffQty, refTable, refId) {
+  async updateStock(tx, item, diffQty, refTable, refId, userId) {
     const stock = await tx.stock.findUnique({
       where: {
         material_id_warehouse_id_location_id: {
@@ -166,12 +166,14 @@ export default {
       },
       update: {
         quantity: afterQty,
+        updated_by: userId,
       },
       create: {
         material_id: item.material_id,
         warehouse_id: item.warehouse_id,
         location_id: item.location_id,
         quantity: afterQty,
+        updated_by: userId,
       },
     });
 
@@ -189,6 +191,7 @@ export default {
         amount: amount,
         ref_table: refTable,
         ref_id: refId,
+        created_by: userId,
       },
     });
   },
@@ -236,6 +239,7 @@ export default {
           -item.quantity,
           "inbound_cancel",
           inbound.id,
+          inbound.user_id,
         );
       }
 
@@ -260,6 +264,8 @@ export default {
             inbound_no: data.inbound_no,
             user_id: user.id,
             memo: data.memo,
+            created_by: user.id,
+            updated_by: user.id,
           },
         });
 
@@ -282,6 +288,7 @@ export default {
             inbound_no: data.inbound_no,
             user_id: user.id,
             memo: data.memo,
+            updated_by: user.id,
           },
         });
 
@@ -319,6 +326,7 @@ export default {
             -oldItem.quantity,
             "inbound_update_cancel",
             inbound.id,
+            user.id,
           );
 
           await tx.inboundItem.update({
@@ -340,6 +348,7 @@ export default {
             item.quantity,
             "inbound_update",
             inbound.id,
+            user.id,
           );
 
           keepIds.push(item.id);
@@ -363,6 +372,7 @@ export default {
             item.quantity,
             "inbound",
             inbound.id,
+            user.id,
           );
 
           keepIds.push(created.id);
@@ -378,6 +388,7 @@ export default {
           -item.quantity,
           "inbound_delete",
           inbound.id,
+          user.id,
         );
 
         await tx.inboundItem.delete({

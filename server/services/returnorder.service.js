@@ -192,7 +192,7 @@ export default {
    * 재고 처리 로직 (반품은 재고를 증가(+) 시킵니다)
    * @param {number} diffQty - 변화량 (반품 등록 시 +, 삭제 시 -)
    */
-  async updateStock(tx, item, diffQty, refTable, refId) {
+  async updateStock(tx, item, diffQty, refTable, refId, userId) {
     // 반품은 해당 위치에 재고가 없을 수도 있으므로 upsert 사용
     const stock = await tx.stock.upsert({
       where: {
@@ -204,12 +204,14 @@ export default {
       },
       update: {
         quantity: { increment: diffQty },
+        updated_by: userId,
       },
       create: {
         material_id: item.material_id,
         warehouse_id: item.warehouse_id,
         location_id: item.location_id,
         quantity: diffQty,
+        updated_by: userId,
       },
     });
 
@@ -231,6 +233,7 @@ export default {
         amount: (stock.avg_cost ?? 0) * Math.abs(diffQty),
         ref_table: refTable,
         ref_id: refId,
+        created_by: userId,
       },
     });
   },
@@ -257,6 +260,8 @@ export default {
             status: data.status || "REQUESTED",
             memo: data.memo,
             totalAmount: data.totalAmount || 0,
+            created_by: user.id,
+            updated_by: user.id,
           },
         });
       } else {
@@ -267,6 +272,7 @@ export default {
             status: data.status,
             memo: data.memo,
             totalAmount: data.totalAmount,
+            updated_by: user.id,
           },
         });
       }
@@ -287,6 +293,7 @@ export default {
           -oldItem.quantity,
           "RETURN_UPDATE_CANCEL",
           returnOrder.id,
+          user.id,
         );
       }
 
@@ -325,6 +332,7 @@ export default {
             item.quantity,
             "RETURNORDER",
             returnOrder.id,
+            user.id,
           );
         }
       }
@@ -367,6 +375,7 @@ export default {
             -item.quantity,
             "RETURN_CANCEL",
             returnOrder.id,
+            returnOrder.user_id,
           );
         }
       }

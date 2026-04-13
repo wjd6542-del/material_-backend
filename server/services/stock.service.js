@@ -481,6 +481,7 @@ export default {
         where: { id: fromStock.id },
         data: {
           quantity: { decrement: quantity },
+          updated_by: user.id,
         },
       });
 
@@ -510,6 +511,7 @@ export default {
           where: { id: toStock.id },
           data: {
             quantity: { increment: quantity },
+            updated_by: user.id,
           },
         });
       } else {
@@ -519,6 +521,7 @@ export default {
             warehouse_id: toWarehouseId,
             location_id: to_location_id,
             quantity,
+            updated_by: user.id,
           },
         });
 
@@ -536,6 +539,7 @@ export default {
           quantity,
           before_qty: fromBefore,
           after_qty: fromBefore - quantity,
+          created_by: user.id,
         },
       });
 
@@ -550,6 +554,7 @@ export default {
           quantity,
           before_qty: toBefore,
           after_qty: toBefore + quantity,
+          created_by: user.id,
         },
       });
 

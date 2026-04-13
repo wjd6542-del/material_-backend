@@ -236,7 +236,7 @@ export default {
   },
 
   // 재고 처리
-  async updateStock(tx, item, diffQty, refTable, refId) {
+  async updateStock(tx, item, diffQty, refTable, refId, userId) {
     const stock = await tx.stock.findUnique({
       where: {
         material_id_warehouse_id_location_id: {
@@ -265,6 +265,7 @@ export default {
       where: { id: stock.id },
       data: {
         quantity: afterQty,
+        updated_by: userId,
       },
     });
 
@@ -282,6 +283,7 @@ export default {
         amount: amount,
         ref_table: refTable,
         ref_id: refId,
+        created_by: userId,
       },
     });
   },
@@ -326,6 +328,7 @@ export default {
           item.quantity,
           "outbound_cancel",
           outbound.id,
+          outbound.user_id,
         );
       }
 
@@ -361,6 +364,8 @@ export default {
             outbound_no: data.outbound_no,
             user_id: user.id,
             memo: data.memo,
+            created_by: user.id,
+            updated_by: user.id,
           },
         });
 
@@ -383,6 +388,7 @@ export default {
             outbound_no: data.outbound_no,
             user_id: user.id,
             memo: data.memo,
+            updated_by: user.id,
           },
         });
 
@@ -419,6 +425,7 @@ export default {
             oldItem.quantity,
             "outbound_update_cancel",
             outbound.id,
+            user.id,
           );
 
           await tx.outboundItem.update({
@@ -443,6 +450,7 @@ export default {
             -item.quantity,
             "outbound_update",
             outbound.id,
+            user.id,
           );
 
           keepIds.push(item.id);
@@ -469,6 +477,7 @@ export default {
             -item.quantity,
             "outbound",
             outbound.id,
+            user.id,
           );
 
           keepIds.push(created.id);
@@ -484,6 +493,7 @@ export default {
           item.quantity,
           "outbound_delete",
           outbound.id,
+          user.id,
         );
 
         await tx.outboundItem.delete({

@@ -288,6 +288,7 @@ model Stock {
     avg_cost    Decimal @default(0) @db.Decimal(15, 2) // 이동평균 단가
     stock_value Decimal @default(0) @db.Decimal(18, 2) // 재고 평가금액 (수량 × 평균단가)
 
+    updated_by Int? // 마지막 수정자 ID
     updated_at DateTime @updatedAt
 
     material  Material  @relation(fields: [material_id], references: [id], onDelete: Cascade)
@@ -325,6 +326,8 @@ model StockHistory {
 
     memo String? // 메모
 
+    created_by Int? // 처리자 ID
+
     created_at DateTime @default(now())
 
     material  Material  @relation(fields: [material_id], references: [id])
@@ -352,7 +355,11 @@ model Inbound {
 
     memo String? // 메모
 
+    created_by Int? // 등록자 ID
+    updated_by Int? // 마지막 수정자 ID
+
     created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
 
     items InboundItem[] // 입고 품목 목록
 }
@@ -396,7 +403,11 @@ model Outbound {
 
     memo String? // 메모
 
+    created_by Int? // 등록자 ID
+    updated_by Int? // 마지막 수정자 ID
+
     created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
 
     items OutboundItem[] // 출고 품목 목록
 }
@@ -681,6 +692,9 @@ model ReturnOrder {
     status      ReturnStatus @default(REQUESTED) // 반품 진행 상태
     totalAmount Float        @default(0) // 반품 총액
     memo        String?      @db.Text // 메모
+
+    created_by Int? // 등록자 ID
+    updated_by Int? // 마지막 수정자 ID
 
     created_at DateTime @default(now())
     updated_at DateTime @updatedAt

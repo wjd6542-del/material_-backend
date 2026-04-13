@@ -114,7 +114,24 @@ export default {
   },
 
   /**
+   * 트리에서 기존 ID 목록 추출 (재귀)
+   */
+  collectIds(nodes, ids = new Set()) {
+    for (const node of nodes) {
+      if (node.id && !node.isNew) {
+        ids.add(node.id);
+      }
+      if (node.children?.length) {
+        this.collectIds(node.children, ids);
+      }
+    }
+    return ids;
+  },
+
+  /**
    * 일괄 저장 (재귀 트리 구조)
+   * - 프론트 트리에 없는 기존 노드는 삭제 처리
+   * - 자재(Material)가 연결된 카테고리는 삭제하지 않음
    * @param {*} data
    */
   async batchSave(data = []) {
@@ -123,6 +140,46 @@ export default {
     }
 
     return prisma.$transaction(async (tx) => {
+      // 1. 프론트 트리에 포함된 기존 ID 수집
+      const incomingIds = this.collectIds(data);
+
+      // 2. DB 기존 전체 카테고리 조회
+      const existingAll = await tx.materialCategory.findMany({
+        select: { id: true },
+      });
+
+      // 3. 프론트 트리에 없는 노드 = 삭제 대상
+      const deleteTargetIds = existingAll
+        .map((row) => row.id)
+        .filter((id) => !incomingIds.has(id));
+
+      // 4. 삭제 대상 중 자재가 연결된 카테고리 확인
+      if (deleteTargetIds.length > 0) {
+        const linkedCategories = await tx.material.findMany({
+          where: { category_id: { in: deleteTargetIds } },
+          select: { category_id: true },
+          distinct: ["category_id"],
+        });
+        const linkedIds = new Set(
+          linkedCategories.map((m) => m.category_id),
+        );
+
+        const safeDeleteIds = deleteTargetIds.filter(
+          (id) => !linkedIds.has(id),
+        );
+
+        // 자식 → 부모 순서로 삭제 (FK 제약 회피)
+        if (safeDeleteIds.length > 0) {
+          await tx.materialCategory.deleteMany({
+            where: { id: { in: safeDeleteIds }, parentId: { not: null } },
+          });
+          await tx.materialCategory.deleteMany({
+            where: { id: { in: safeDeleteIds } },
+          });
+        }
+      }
+
+      // 5. 트리 저장
       const results = [];
       for (let i = 0; i < data.length; i++) {
         try {
