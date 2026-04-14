@@ -150,6 +150,7 @@ model Material {
     outboundDailyStats  OutboundDailyStat[]
     returnOrderItems    ReturnOrderItem[]
     returnDailyStats    ReturnDailyStat[]
+    tags                MaterialTag[]
 }
 
 /// 자재 이미지 (다중 첨부 지원)
@@ -169,6 +170,31 @@ model MaterialImage {
     material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
 
     @@index([material_id])
+}
+
+/// 태그 마스터 (자재와 독립적으로 관리)
+model Tag {
+    id         Int      @id @default(autoincrement())
+    name       String   @unique // 태그명 (고유)
+    sort       Int      @default(0) // 정렬 순서
+    created_at DateTime @default(now())
+
+    materials MaterialTag[]
+}
+
+/// 자재-태그 연결 (다대다)
+model MaterialTag {
+    id          Int      @id @default(autoincrement())
+    material_id Int
+    tag_id      Int
+    created_at  DateTime @default(now())
+
+    material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
+    tag      Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+    @@unique([material_id, tag_id])
+    @@index([material_id])
+    @@index([tag_id])
 }
 
 //////////////////////////////////////////////////////////////

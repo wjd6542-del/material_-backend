@@ -35,6 +35,20 @@ export const saveSchema = z.object({
   memo: z.coerce.string().optional(),
   is_active: z.coerce.boolean().optional(),
   safety_stock: z.coerce.number().optional(),
+
+  tag_ids: z
+    .union([z.array(z.coerce.number().int().positive()), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined) return undefined;
+      if (Array.isArray(val)) return val.map(Number);
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed.map(Number) : [];
+      } catch {
+        return [];
+      }
+    }),
 });
 
 export const updateSchema = z.object({
@@ -76,6 +90,20 @@ export const updateSchema = z.object({
       if (!val) return [];
       try {
         return JSON.parse(val);
+      } catch {
+        return [];
+      }
+    }),
+
+  tag_ids: z
+    .union([z.array(z.coerce.number().int().positive()), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined) return undefined;
+      if (Array.isArray(val)) return val.map(Number);
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed.map(Number) : [];
       } catch {
         return [];
       }

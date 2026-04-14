@@ -127,6 +127,15 @@ export default {
       };
     }
 
+    //  태그 검색
+    if (data?.tag_ids && data.tag_ids.length) {
+      where.tags = {
+        some: {
+          tag_id: { in: data.tag_ids.map(Number) },
+        },
+      };
+    }
+
     const rows = await prisma.material.findMany({
       where,
       orderBy: { id: "desc" },
@@ -134,6 +143,9 @@ export default {
         category: true,
         images: {
           orderBy: { sort: "asc" },
+        },
+        tags: {
+          include: { tag: true },
         },
       },
       take,
@@ -143,6 +155,7 @@ export default {
       rows.map(async (row) => ({
         ...row,
         category_name: row.category?.name ?? "",
+        tags: row.tags.map((t) => t.tag),
         qrcode: await generateQR(row.code),
       })),
     );
@@ -159,12 +172,18 @@ export default {
         images: {
           orderBy: { sort: "asc" },
         },
+        tags: {
+          include: { tag: true },
+        },
       },
     });
     if (!item) {
       throw new AppError("존재하지 않는 데이터입니다.", 404, "NOT_FOUND");
     }
-    return item;
+    return {
+      ...item,
+      tags: item.tags.map((t) => t.tag),
+    };
   },
 
   async deleteById(id) {
@@ -243,10 +262,13 @@ export default {
         /* =========================
          1️⃣ 등록
       ========================== */
+        const tagIds = Array.isArray(data.tag_ids) ? data.tag_ids : undefined;
+
         if (!data.id || data.id === 0) {
           const createData = { ...data };
           delete createData.id;
           delete createData.deleteImageIds;
+          delete createData.tag_ids;
 
           const exist = await prisma.material.findUnique({
             where: { code: data.code },
@@ -276,7 +298,7 @@ export default {
           /* =========================
            2️⃣ 수정
         ========================== */
-          const { deleteImageIds = [], ...updateData } = data;
+          const { deleteImageIds = [], tag_ids, ...updateData } = data;
 
           const existing = await tx.material.findUnique({
             where: { id: data.id },
@@ -370,6 +392,25 @@ export default {
           await tx.materialImage.createMany({
             data: imageRecords,
           });
+        }
+
+        /* =========================
+         5️⃣ 태그 연결 동기화
+      ========================== */
+        if (tagIds !== undefined) {
+          await tx.materialTag.deleteMany({
+            where: { material_id: post.id },
+          });
+
+          if (tagIds.length) {
+            await tx.materialTag.createMany({
+              data: tagIds.map((tag_id) => ({
+                material_id: post.id,
+                tag_id: Number(tag_id),
+              })),
+              skipDuplicates: true,
+            });
+          }
         }
 
         return post;
