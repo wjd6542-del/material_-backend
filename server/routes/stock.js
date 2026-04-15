@@ -42,9 +42,14 @@ export default async function stockRoutes(app) {
     return stockService.warehousStock(req.body);
   });
 
-  // 창고대비 자재 목록 조회
+  // 위치 기준 자재
   app.post("/locationStock", async (req) => {
     return stockService.locationStock(req.body);
+  });
+
+  // 선반기준 자재
+  app.post("/shelfStock", async (req) => {
+    return stockService.shelfStock(req.body);
   });
 
   // 재고 이동 처리

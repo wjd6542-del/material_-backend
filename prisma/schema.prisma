@@ -214,7 +214,8 @@ model Supplier {
 
     created_at DateTime @default(now())
 
-    inbound_items InboundItem[] // 이 업체를 통해 입고된 품목
+    inbound_items  InboundItem[] // 이 업체를 통해 입고된 품목
+    outbound_items OutboundItem[] // 이 업체로 출고된 품목
 }
 
 //////////////////////////////////////////////////////////////
@@ -399,7 +400,7 @@ model InboundItem {
     supplier_id  Int? // 공급업체 (선택)
     warehouse_id Int
     location_id  Int
-    shelf_id     Int? // 선반 (선택)
+    shelf_id     Int // 선반 (필수)
 
     quantity Int // 입고 수량
 
@@ -411,7 +412,7 @@ model InboundItem {
     supplier  Supplier? @relation(fields: [supplier_id], references: [id])
     warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
     location  Location  @relation(fields: [location_id], references: [id])
-    shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
+    shelf     Shelf     @relation(fields: [shelf_id], references: [id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -444,9 +445,10 @@ model OutboundItem {
 
     outbound_id  Int
     material_id  Int
+    supplier_id  Int // 거래처 (필수)
     warehouse_id Int
     location_id  Int
-    shelf_id     Int? // 선반 (선택)
+    shelf_id     Int // 선반 (필수)
 
     quantity Int // 출고 수량
 
@@ -460,9 +462,10 @@ model OutboundItem {
 
     outbound  Outbound  @relation(fields: [outbound_id], references: [id], onDelete: Cascade)
     material  Material  @relation(fields: [material_id], references: [id])
+    supplier  Supplier  @relation(fields: [supplier_id], references: [id])
     warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
     location  Location  @relation(fields: [location_id], references: [id])
-    shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
+    shelf     Shelf     @relation(fields: [shelf_id], references: [id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -740,7 +743,7 @@ model ReturnOrderItem {
     material_id  Int
     warehouse_id Int
     location_id  Int
-    shelf_id     Int? // 선반 (선택)
+    shelf_id     Int // 선반 (필수)
 
     quantity    Int
     sale_price  Decimal @db.Decimal(15, 2) // 원래 판매 단가
@@ -755,7 +758,7 @@ model ReturnOrderItem {
     material    Material    @relation(fields: [material_id], references: [id])
     location    Location    @relation(fields: [location_id], references: [id])
     warehouse   Warehouse   @relation(fields: [warehouse_id], references: [id])
-    shelf       Shelf?      @relation(fields: [shelf_id], references: [id])
+    shelf       Shelf       @relation(fields: [shelf_id], references: [id])
     returnOrder ReturnOrder @relation(fields: [returnOrder_id], references: [id], onDelete: Cascade)
 
     @@index([returnOrder_id]) // 마스터-디테일 조인 속도 향상

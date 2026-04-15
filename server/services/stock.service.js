@@ -318,15 +318,14 @@ export default {
     return racks.map((rack) => ({
       id: rack.id,
       name: rack.name,
-      x: rack.x,
-      y: rack.y,
-      width: rack.width,
-      height: rack.height,
+      code: rack.code,
+      points: rack.points,
+      rotation: rack.rotation,
       stocks: stockMap[rack.id] || [],
     }));
   },
 
-  // 선반 기준 자재 리스트
+  // 위치 기준 재고
   async locationStock(data) {
     const where = {};
 
@@ -408,19 +407,107 @@ export default {
       });
     });
 
+    console.log("locations >> 정보 확인", locations);
+
     // 5️⃣ 반환
     return locations.map((loc) => ({
       id: loc.id,
       name: loc.name,
       code: loc.code,
       warehouse_id: loc.warehouse_id,
-
-      x: loc.x,
-      y: loc.y,
-      width: loc.width,
-      height: loc.height,
-
+      points: loc.points,
+      rotation: loc.rotation,
       stocks: stockMap[loc.id] || [],
+    }));
+  },
+
+  // 선반 기준 재고
+  async shelfStock(data) {
+    const where = {};
+
+    if (data.warehouse_id) {
+      where.location = { warehouse_id: data.warehouse_id };
+    }
+    if (data.location_id) {
+      where.location_id = data.location_id;
+    }
+
+    // 1️⃣ 선반 조회
+    const shelves = await prisma.shelf.findMany({
+      where,
+      orderBy: { sort: "asc" },
+    });
+
+    const shelfIds = shelves.map((v) => v.id);
+
+    // 2️⃣ 재고 groupBy
+    const stocks = await prisma.stock.groupBy({
+      by: ["shelf_id", "material_id"],
+      where: {
+        shelf_id: { in: shelfIds },
+      },
+      _sum: {
+        quantity: true,
+      },
+    });
+
+    const materialIds = stocks.map((v) => v.material_id);
+
+    // 3️⃣ 자재 + 이미지 조회
+    const materials = await prisma.material.findMany({
+      where: {
+        id: { in: materialIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        images: {
+          select: {
+            id: true,
+            file_url: true,
+            file_name: true,
+          },
+          orderBy: { sort: "asc" },
+          take: 1,
+        },
+      },
+    });
+
+    const materialMap = Object.fromEntries(materials.map((v) => [v.id, v]));
+
+    // 4️⃣ stock map
+    const stockMap = {};
+
+    stocks.forEach((v) => {
+      if (!stockMap[v.shelf_id]) {
+        stockMap[v.shelf_id] = [];
+      }
+
+      const material = materialMap[v.material_id];
+      const image = material?.images?.[0];
+
+      stockMap[v.shelf_id].push({
+        id: v.material_id,
+        material_name: material?.name,
+        material_code: material?.code,
+        qty: v._sum.quantity,
+        image: image || null,
+        image_url: image?.file_url || null,
+      });
+    });
+
+    // 5️⃣ 반환
+    return shelves.map((shelf) => ({
+      id: shelf.id,
+      name: shelf.name,
+      code: shelf.code,
+      location_id: shelf.location_id,
+      x: shelf.x,
+      y: shelf.y,
+      width: shelf.width,
+      height: shelf.height,
+      stocks: stockMap[shelf.id] || [],
     }));
   },
 

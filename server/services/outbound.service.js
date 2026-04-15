@@ -432,8 +432,10 @@ export default {
             where: { id: item.id },
             data: {
               material_id: item.material_id,
+              supplier_id: item.supplier_id,
               warehouse_id: item.warehouse_id,
               location_id: item.location_id,
+              shelf_id: item.shelf_id,
               quantity: item.quantity,
               sale_price: item.sale_price,
               sale_amount: item.quantity * item.sale_price,
@@ -459,8 +461,10 @@ export default {
             data: {
               outbound_id: outbound.id,
               material_id: item.material_id,
+              supplier_id: item.supplier_id,
               warehouse_id: item.warehouse_id,
               location_id: item.location_id,
+              shelf_id: item.shelf_id,
               quantity: item.quantity,
               sale_price: item.sale_price,
               sale_amount: item.quantity * item.sale_price,

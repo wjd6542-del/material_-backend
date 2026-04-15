@@ -9,6 +9,7 @@ export const itemsSchema = z.object({
   material_id: z.coerce.number().int().min(1, "자재를 선택해야 합니다."),
   warehouse_id: z.coerce.number().int().min(1, "창고를 선택해야 합니다."),
   location_id: z.coerce.number().int().min(1, "창고위치를 선택해야 합니다."),
+  shelf_id: z.coerce.number().int().min(1, "선반을 선택해야 합니다."),
   quantity: z.coerce.number().int().min(1, "수량은 1 이상이어야 합니다."),
   sale_price: z.coerce.number().min(1, "판매 금액은 1 이상이어야 합니다."),
   cost_price: z.coerce.number().min(1, "원가 금액은 1 이상이어야 합니다."),
