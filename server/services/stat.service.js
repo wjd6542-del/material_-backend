@@ -2,12 +2,22 @@
 import AppError from "../errors/AppError.js";
 import dayjs from "dayjs";
 
+/**
+ * 통계(StatService) 클래스
+ * - 일별 입·출고·반품·재고 스냅샷 집계 생성 및 조회
+ * - 대시보드·차트 데이터 제공
+ * - cron 배치와 수동 재집계 API 가 동일한 createXxxDailyStat 메서드 호출
+ */
 class StatService {
   // ==============================
   // 공통 유틸
   // ==============================
 
-  // KST 기준 날짜 범위
+  /**
+   * KST(+09:00) 기준 지정일의 00:00 ~ 23:59.999 범위 계산
+   * @param {string|null} date 'YYYY-MM-DD' (null 이면 오늘)
+   * @returns {{start:Date,end:Date,target:Date}}
+   */
   getDateRange(date = null) {
     const target = date ? new Date(`${date}T00:00:00+09:00`) : new Date();
 
@@ -20,12 +30,15 @@ class StatService {
     return { start, end, target };
   }
 
-  // 날짜 문자열 변환
+  /** Date → 'YYYY-MM-DD' 문자열 포맷 */
   formatDate(date) {
     return new Date(date).toISOString().slice(0, 10);
   }
 
-  // 조회용 날짜 where 생성
+  /**
+   * 리스트 조회용 date 범위 where 생성 (기본값은 오늘)
+   * @param {{startDate?:string, endDate?:string}} data
+   */
   buildDateWhere(data) {
     const now = new Date();
 
@@ -71,6 +84,7 @@ class StatService {
   // 리스트 조회
   // ==============================
 
+  /** 입고 일별 통계 리스트 (기간/자재 필터, 최신순) */
   async inboundList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -90,6 +104,7 @@ class StatService {
     }));
   }
 
+  /** 출고 일별 통계 리스트 */
   async outboundList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -109,7 +124,7 @@ class StatService {
     }));
   }
 
-  // 반품 리스트
+  /** 반품 일별 통계 리스트 */
   async returnList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -129,6 +144,7 @@ class StatService {
     }));
   }
 
+  /** 재고 일별 스냅샷 리스트 (자재·창고 조인) */
   async stockList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -155,6 +171,13 @@ class StatService {
   // ==============================
   // 입고 일별 통계
   // ==============================
+  /**
+   * 지정일 기준 입고 일별 통계(InboundDailyStat) 재생성
+   * InboundItem 을 자재별 groupBy 한 뒤 기존 레코드 삭제 후 일괄 생성.
+   * cron 배치(매일 00:10)와 수동 API 양쪽에서 호출.
+   * @param {string|null} date 'YYYY-MM-DD' (null 이면 오늘)
+   * @returns {Promise<{type:'inbound',count:number}>}
+   */
   async createInboundDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
 
@@ -214,6 +237,10 @@ class StatService {
   // ==============================
   // 출고 일별 통계
   // ==============================
+  /**
+   * 지정일 기준 출고 일별 통계(OutboundDailyStat) 재생성
+   * 자재별 수량/판매금액/원가/이익 합계를 저장.
+   */
   async createOutboundDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
     const startDate = dayjs(target).startOf("day").toDate();
@@ -275,6 +302,9 @@ class StatService {
   // ==============================
   // 반품 일별 통계
   // ==============================
+  /**
+   * 지정일 기준 반품 일별 통계(ReturnDailyStat) 재생성
+   */
   async createReturnDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
 
@@ -337,6 +367,11 @@ class StatService {
   // ==============================
   // 재고 스냅샷
   // ==============================
+  /**
+   * 지정일 기준 재고 일별 스냅샷(StockDailySnapshot) 재생성
+   * Stock 을 자재×창고 단위로 groupBy 해 수량 합계 저장
+   * (location/shelf 는 합산 대상 아님)
+   */
   async createStockDailyStat(date = null) {
     const { target } = this.getDateRange(date);
 
@@ -386,6 +421,7 @@ class StatService {
   // 차트용
   // ==============================
 
+  /** 입고 차트 데이터 (일자별 total_qty / total_cost) */
   async inboundDailyTotalAmount(data) {
     const where = this.buildDateWhere(data);
 
@@ -406,7 +442,7 @@ class StatService {
     }));
   }
 
-  // 출고 차트
+  /** 출고 차트 데이터 (수량/원가/매출/이익 일자별 합계) */
   async outboundDailyTotalAmount(data) {
     const where = this.buildDateWhere(data);
 
@@ -431,7 +467,7 @@ class StatService {
     }));
   }
 
-  // 반품 차트
+  /** 반품 차트 데이터 (수량/원가/매출/이익 일자별 합계) */
   async returnDailyTotalAmount(data) {
     const where = this.buildDateWhere(data);
 
@@ -456,6 +492,7 @@ class StatService {
     }));
   }
 
+  /** 재고 차트 데이터 (일자별 총 수량) */
   async stockDailyTotalQty(data) {
     const where = this.buildDateWhere(data);
 

@@ -16,6 +16,12 @@ import auditHook from "./plugins/auditHook.js";
 
 const app = Fastify({ logger: true });
 
+/**
+ * 요청에서 실제 클라이언트 IP 추출
+ * (x-forwarded-for → req.ip → 소켓 원격주소 순, IPv6 매핑 IPv4 변환 처리)
+ * @param {FastifyRequest} req
+ * @returns {string}
+ */
 function getClientIp(req) {
   let ip =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -47,6 +53,13 @@ await app.register(multipart, {
 // ----------------------------
 // ✅ 전역 헤더 검사 + IP 제한
 // ----------------------------
+/**
+ * /api/* 요청 공통 전처리 훅
+ * 1) x-api-key 검증
+ * 2) Authorization Bearer 토큰이 있으면 JWT 검증 후 request.user 주입
+ * 3) ip_restrict=true && !is_super 일 경우 UserIpWhitelist 검사
+ * (토큰 없는 경우는 통과 → 로그인/회원가입 API 에서 사용)
+ */
 app.addHook("onRequest", async (request, reply) => {
   const apiKey = request.headers["x-api-key"];
 

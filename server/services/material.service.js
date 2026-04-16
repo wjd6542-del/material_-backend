@@ -12,20 +12,29 @@ const MATERIAL_INCLUDE = {
   tags: { include: { tag: true } },
 };
 
+/** MaterialTag 중간 테이블을 풀어서 tags 배열을 평탄화한다. */
 function flattenTags(row) {
   return { ...row, tags: row.tags.map((t) => t.tag) };
 }
 
+/** `/uploads/xxx` 공개 URL → 실제 파일 시스템 경로로 변환. */
 function toUploadPath(fileUrl) {
   return path.join(UPLOAD_DIR, fileUrl.replace("/uploads/", ""));
 }
 
+/** 파일이 존재하면 삭제 (없어도 에러 없이 통과). */
 async function unlinkIfExists(filePath) {
   if (fs.existsSync(filePath)) {
     await fs.promises.unlink(filePath);
   }
 }
 
+/**
+ * 자재-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tagIds 로 재생성)
+ * @param {Prisma.TransactionClient} tx
+ * @param {number} materialId
+ * @param {number[]} tagIds
+ */
 async function syncMaterialTags(tx, materialId, tagIds) {
   await tx.materialTag.deleteMany({ where: { material_id: materialId } });
   if (!tagIds.length) return;
@@ -38,6 +47,7 @@ async function syncMaterialTags(tx, materialId, tagIds) {
   });
 }
 
+/** 자재 생성/수정 시 MATERIAL 타입 알림 생성 */
 async function createNotification(tx, user, post, isCreate) {
   await tx.notification.create({
     data: {
@@ -52,6 +62,13 @@ async function createNotification(tx, user, post, isCreate) {
   });
 }
 
+/**
+ * 업로드된 이미지들을 디스크에 저장하고 MaterialImage 레코드 생성.
+ * @param {Prisma.TransactionClient} tx
+ * @param {number} materialId
+ * @param {Array} files parseMultipart 결과 files 배열
+ * @param {string[]} savedFiles 롤백용 파일명 누적 배열 (out-param)
+ */
 async function saveImageFiles(tx, materialId, files, savedFiles) {
   if (!files.length) return;
 
@@ -81,6 +98,12 @@ async function saveImageFiles(tx, materialId, files, savedFiles) {
   await tx.materialImage.createMany({ data: imageRecords });
 }
 
+/**
+ * 지정된 MaterialImage ID 목록을 디스크 + DB 에서 삭제.
+ * @param {Prisma.TransactionClient} tx
+ * @param {number} materialId
+ * @param {number[]} deleteImageIds
+ */
 async function deleteSelectedImages(tx, materialId, deleteImageIds) {
   if (!deleteImageIds.length) return;
 
@@ -98,7 +121,11 @@ async function deleteSelectedImages(tx, materialId, deleteImageIds) {
 }
 
 export default {
-  // 이번달 신규 자재 리스트
+  /**
+   * 이번 달 1일 00:00 ~ 다음 달 1일 범위로 생성된 자재 리스트 (대시보드용)
+   * @param {{limit?:number}} data
+   * @returns {Promise<Array<{id:number,name:string,code:string,created_at:Date}>>}
+   */
   async newMonthMaterial(data) {
     const start = new Date();
     start.setDate(1);
@@ -120,6 +147,10 @@ export default {
     });
   },
 
+  /**
+   * 자재 페이지네이션 리스트 (page/limit/keyword/기간 필터)
+   * @param {{page?:number,limit?:number,keyword?:string,startDate?:string,endDate?:string}} data
+   */
   async getPageList(data) {
     const where = {};
     const page = data.page || 1;
@@ -148,7 +179,11 @@ export default {
     });
   },
 
-  // 리스트 조회
+  /**
+   * 자재 리스트 (material_ids/category/keyword/tag/기간 필터, 최대 50건, QR 포함)
+   * @param {Object} data
+   * @returns {Promise<Array>}
+   */
   async getList(data) {
     const where = {};
 
@@ -201,6 +236,10 @@ export default {
     );
   },
 
+  /**
+   * 자재 단건 조회 (category/images/tags 포함)
+   * @param {number} id
+   */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -214,6 +253,10 @@ export default {
     return flattenTags(item);
   },
 
+  /**
+   * 자재 단건 삭제 (이미지 파일 디스크 + MaterialImage + Material 순서로 삭제)
+   * @param {number} id
+   */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -238,7 +281,10 @@ export default {
     });
   },
 
-  // 일괄 삭제
+  /**
+   * 자재 일괄 삭제 (Promise.all + deleteById 각 건 실행, 실패 건 인덱스 포함 에러)
+   * @param {Array<{id:number}>} data
+   */
   async batchDelete(data = []) {
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
@@ -257,6 +303,15 @@ export default {
     );
   },
 
+  /**
+   * 자재 생성/수정 트랜잭션
+   * - id 없으면 생성(code 중복 체크), 있으면 수정 + deleteImageIds 처리
+   * - 알림 생성, 이미지 파일 저장, 태그 재동기화 모두 트랜잭션 내 수행
+   * - 트랜잭션 실패 시 이미 디스크에 저장된 이미지 파일 롤백
+   * @param {Object} data { id, code, name, ..., deleteImageIds, tag_ids }
+   * @param {Array} files 업로드 파일 배열
+   * @param {Object} user 로그인 사용자
+   */
   async save(data, files = [], user) {
     await fs.promises.mkdir(UPLOAD_DIR, { recursive: true });
 

@@ -3,7 +3,9 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
 export default {
-  // 전체 목록 조회
+  /**
+   * 반품 전표 전체 리스트 (items + material + warehouse 포함, 최신순)
+   */
   async getAllList() {
     return prisma.returnOrder.findMany({
       include: {
@@ -18,7 +20,12 @@ export default {
     });
   },
 
-  // 보드용 카운트 및 통계
+  /**
+   * 반품 보드 카운트
+   * - 전체 반품 건수
+   * - 총 수량/판매금액/원가/이익 합계
+   * - 상태(ReturnStatus)별 건수
+   */
   async boardCount() {
     try {
       // 1. 전체 반품 건수
@@ -67,7 +74,9 @@ export default {
     }
   },
 
-  // 필터링 목록 조회
+  /**
+   * 반품 전표 리스트 (return_no 검색, 상태/기간 필터, QR 포함)
+   */
   async getList(data) {
     const where = {};
 
@@ -104,7 +113,9 @@ export default {
     return result;
   },
 
-  // 상세 페이지 조회
+  /**
+   * 반품 아이템(ReturnOrderItem) 리스트 (자재/창고/위치/상태/기간 필터)
+   */
   async getDetailList(data) {
     const where = {};
 
@@ -167,7 +178,9 @@ export default {
     return result;
   },
 
-  // 상세 데이터 단건 조회
+  /**
+   * 반품 전표 단건 상세 조회 (items + 창고/자재/위치 포함)
+   */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400);
 
@@ -189,8 +202,16 @@ export default {
   },
 
   /**
-   * 재고 처리 로직 (반품은 재고를 증가(+) 시킵니다)
-   * @param {number} diffQty - 변화량 (반품 등록 시 +, 삭제 시 -)
+   * 반품 재고 업데이트 + StockHistory(RETURNORDER 타입) 이력 기록.
+   * 반품은 재고를 증가(+)시키므로 삭제/취소 시 음수로 호출해 원복한다.
+   * 반품 위치에 기존 재고가 없을 수 있어 upsert 방식.
+   * 단가는 기존 Stock.avg_cost 사용(없으면 0).
+   * @param {Prisma.TransactionClient} tx
+   * @param {Object} item
+   * @param {number} diffQty 변화량 (반품 등록 시 +, 취소 시 -)
+   * @param {string} refTable
+   * @param {number} refId
+   * @param {number} userId
    */
   async updateStock(tx, item, diffQty, refTable, refId, userId) {
     // 반품은 해당 위치에 재고가 없을 수도 있으므로 upsert 사용
@@ -239,7 +260,14 @@ export default {
   },
 
   /**
-   * 반품 저장 (등록 및 수정)
+   * 반품 전표 생성/수정 트랜잭션
+   * - id 없음: ReturnOrder + ReturnOrderItem 생성
+   *   상태가 COMPLETED 로 저장되면 각 item 재고 증가 + 이력 기록 + stock_status DONE 처리
+   * - id 존재: 상태 전이를 고려해 기존 items 와 신규 items 의 재고 차이 반영
+   *   (COMPLETED → 다른 상태 전이 시 기존 반영된 재고 롤백 등)
+   * - 알림(NotificationType.RETURNORDER) 생성
+   * @param {Object} data { id?, return_no, status, memo, items[] }
+   * @param {Object} user
    */
   async save(data, user) {
     return prisma.$transaction(async (tx) => {
@@ -356,7 +384,9 @@ export default {
   },
 
   /**
-   * 반품 삭제 (재고 원복)
+   * 반품 전표 단건 삭제 (트랜잭션)
+   * - 기존 상태가 COMPLETED 였다면 각 item 재고를 (-) 로 원복 + 이력 기록
+   * - ReturnOrder cascade 로 ReturnOrderItem 삭제
    */
   async deleteById(id) {
     return prisma.$transaction(async (tx) => {
@@ -386,6 +416,9 @@ export default {
     });
   },
 
+  /**
+   * 반품 전표 일괄 삭제 (Promise.all 로 병렬 deleteById)
+   */
   async batchDelete(data = []) {
     if (!data.length) throw new AppError("요청데이터가 없습니다.", 400);
     return Promise.all(data.map((row) => this.deleteById(row.id)));

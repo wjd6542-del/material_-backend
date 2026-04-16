@@ -8,7 +8,16 @@ import {
 } from "../validators/inbound.schema.js";
 import { permission } from "../middleware/permission.js";
 
+/**
+ * 입고(Inbound) 라우트 (/api/inbound/*)
+ * 입고 전표 CRUD + 상세 아이템 + 재고/이력 연동
+ * 대부분 inbound.* 권한 코드 검사 적용
+ */
 export default async function inboundRoutes(app) {
+  /**
+   * 입고 전표 전체 리스트 (권한: inbound.view)
+   * @route POST /api/inbound/allList
+   */
   app.post(
     "/allList",
     {
@@ -19,6 +28,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
+  /**
+   * 입고 전표 리스트 (필터·기간 적용, 권한: inbound.view)
+   * @route POST /api/inbound/list
+   */
   app.post(
     "/list",
     {
@@ -29,7 +42,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 입고 상세
+  /**
+   * 입고 상세(아이템) 리스트 조회 (권한: inbound.detail.view)
+   * @route POST /api/inbound/detail/list
+   */
   app.post(
     "/detail/list",
     {
@@ -40,7 +56,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 정보확인
+  /**
+   * 입고 단건 상세 조회 (권한: inbound.view)
+   * @route POST /api/inbound/:id
+   */
   app.post(
     "/:id",
     {
@@ -52,7 +71,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 삭제
+  /**
+   * 입고 단건 삭제 (재고 롤백 + 이력 기록, 권한: inbound.delete)
+   * @route POST /api/inbound/delete
+   */
   app.post(
     "/delete",
     {
@@ -64,7 +86,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 저장, 수정
+  /**
+   * 입고 전표 생성/수정 (아이템별 재고 증감 + StockHistory 기록)
+   * @route POST /api/inbound/save
+   */
   app.post(
     "/save",
     {
@@ -77,7 +102,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 일괄
+  /**
+   * 입고 전표 일괄 저장 (권한: inbound.update)
+   * @route POST /api/inbound/batchSave
+   */
   app.post(
     "/batchSave",
     {
@@ -89,7 +117,10 @@ export default async function inboundRoutes(app) {
     },
   );
 
-  // 일괄 삭제
+  /**
+   * 입고 전표 일괄 삭제 (권한: inbound.delete)
+   * @route POST /api/inbound/batchDelete
+   */
   app.post(
     "/batchDelete",
     {

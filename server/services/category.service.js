@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 카테고리 전체 리스트 (평면, sort asc) */
   async getAllList(data) {
     return prisma.materialCategory.findMany({
       orderBy: { sort: "asc" },
@@ -9,7 +10,8 @@ export default {
   },
 
   /**
-   * 트리 구조로 카테고리 조회
+   * 카테고리 트리 반환 (root → children 재귀 구성)
+   * 평면 조회 후 Map 으로 parentId 기준 children 연결
    */
   async getCategoryTree() {
     const list = await prisma.materialCategory.findMany({
@@ -37,7 +39,7 @@ export default {
     return roots;
   },
 
-  // 필터링 적용 리스트
+  /** 카테고리 리스트 (key/keys 필터) */
   async getList(data) {
     const where = {};
     if (data?.key) {
@@ -57,7 +59,7 @@ export default {
     });
   },
 
-  // 필터링 적용 리스트
+  /** 드롭다운 표시용 축약 리스트 */
   async getViewList(data) {
     const where = {};
     if (data?.key) {
@@ -75,6 +77,7 @@ export default {
     });
   },
 
+  /** 카테고리 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -85,6 +88,7 @@ export default {
     return item;
   },
 
+  /** 카테고리 단건 삭제 (자식·자재 연결 무시) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     return prisma.materialCategory.delete({ where: { id } });
@@ -114,7 +118,8 @@ export default {
   },
 
   /**
-   * 트리에서 기존 ID 목록 추출 (재귀)
+   * 트리 노드들의 기존 DB ID 집합을 재귀로 수집 (신규 노드 제외)
+   * batchSave 에서 삭제 대상 판별에 사용
    */
   collectIds(nodes, ids = new Set()) {
     for (const node of nodes) {
@@ -225,6 +230,12 @@ export default {
     return saved;
   },
 
+  /**
+   * 카테고리 단일 노드 저장
+   * - isNew=true → create (parentId 있으면 parent connect)
+   * - 아니면 update (parentId 있으면 connect, 없으면 disconnect 로 루트 전환)
+   * @param {Prisma.TransactionClient} [tx=prisma]
+   */
   async save(data, tx = prisma) {
     const { id, name, code, sort, parentId, path, depth, isNew } = data;
     const saveData = { name, code, sort, path, depth };

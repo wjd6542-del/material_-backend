@@ -1,5 +1,15 @@
 ﻿import { getAuditContext } from "./auditContext.js";
 
+/**
+ * Prisma 자동 감사 미들웨어
+ * - create / update / delete / upsert / createMany / updateMany / deleteMany 액션에 한정해 작동
+ * - AuditLog 모델 자기 자신은 제외 (재귀 방지)
+ * - update/delete/upsert 시 수정/삭제 전 스냅샷을 before_data 로 기록
+ * - upsert 는 beforeData 유무로 CREATE/UPDATE 판별
+ * - createMany/updateMany/deleteMany 는 건수 요약(Batch) 메시지로 기록
+ * - 예외 발생 시 status=FAIL 로 기록 후 원본 에러 재던짐
+ * @param {import('@prisma/client').PrismaClient} prisma
+ */
 export function auditMiddleware(prisma) {
   prisma.$use(async (params, next) => {
     const ctx = getAuditContext();

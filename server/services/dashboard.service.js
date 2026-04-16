@@ -2,6 +2,16 @@ import prisma from "../lib/prisma.js";
 import dayjs from "dayjs";
 
 export default {
+  /**
+   * 대시보드 종합 지표 조회
+   * (Prisma $transaction 으로 14개 쿼리 병렬 실행)
+   * - 오늘 입/출고/매출/반품/재고이동 수량
+   * - 현재 총 재고량
+   * - 30일 입고/출고/반품 차트 (일자별 수량 groupBy)
+   * - 재고 TOP 10 / 안전재고 미달 자재
+   * - 최근 감사 로그 10건
+   * - 이번 달 매출·지출·순이익 계산 (InboundDailyStat / OutboundDailyStat 합계)
+   */
   async getDashboard() {
     // 🔥 오늘
     const todayStart = dayjs().startOf("day").toDate();

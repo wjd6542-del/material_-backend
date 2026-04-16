@@ -2,7 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  // 필터링 적용 리스트
+  /**
+   * 감사 로그 리스트
+   * - status (SUCCESS/FAIL)
+   * - search_field: 'target_type' | 'ip' 화이트리스트 기반 부분 매칭
+   * - 기간 필터 (created_at)
+   * - action: CREATE/UPDATE/DELETE/VIEW/LOGIN/LOGOUT 화이트리스트
+   * @param {Object} data
+   */
   async getList(data) {
     const where = {};
 

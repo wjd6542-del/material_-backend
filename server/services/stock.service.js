@@ -3,7 +3,10 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
 export default {
-  // 총재고 수량
+  /**
+   * 재고 건수 및 총 수량 집계 (대시보드 카드 등)
+   * @returns {Promise<{count:number,total_qty:number}>}
+   */
   async stockSummary(data) {
     const count = await prisma.stock.count();
 
@@ -19,7 +22,11 @@ export default {
     };
   },
 
-  // 안전재고 미만
+  /**
+   * 안전재고(Material.safety_stock) 미만인 자재 TOP N
+   * 자재별 재고를 groupBy 로 합산 후 safety_stock 과 비교
+   * @param {{limit?:number}} data (기본 10)
+   */
   async getLowStockMaterials(data) {
     const limit = data?.limit ?? 10;
 
@@ -57,13 +64,23 @@ export default {
     return result;
   },
 
+  /**
+   * 재고 전체 리스트 (sort asc)
+   */
   async getAllList(data) {
     return prisma.stock.findMany({
       orderBy: { sort: "asc" },
     });
   },
 
-  // 필터링 적용 리스트
+  /**
+   * 재고 리스트 (복합 필터)
+   * - in_stock: 수량>0 만
+   * - material_id / warehouse_id / location_id
+   * - startDate/endDate (updated_at)
+   * - scan_code: 자재 코드·이름 부분 매칭 → 매칭된 자재들의 재고만 반환
+   * 자재·창고·위치 정보를 조인하고 QR 코드를 생성해 함께 반환
+   */
   async getList(data) {
     const where = {};
 
@@ -151,6 +168,10 @@ export default {
     return result;
   },
 
+  /**
+   * 재고 단건 조회
+   * @param {number} id Stock.id
+   */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -161,7 +182,10 @@ export default {
     return item;
   },
 
-  // 재고 변동이력 리스트
+  /**
+   * StockHistory(재고 변동이력) 리스트 조회
+   * (material/warehouse/location/type/검색어/기간 필터 + 자재·창고·위치 조인)
+   */
   async getDetailList(data) {
     const where = {};
 
@@ -246,7 +270,11 @@ export default {
     return result;
   },
 
-  // 창고 기준 자재 리스트
+  /**
+   * 창고별 자재 재고 집계 (도면 표시용 points/rotation 포함)
+   * 1) Warehouse 전체 조회 → 2) Stock groupBy(warehouse,material) → 3) 자재+대표이미지 조회
+   * → 4) 창고 id 로 stocks 배열 매핑 → 반환
+   */
   async warehousStock() {
     // 1️⃣ 랙 조회
     const racks = await prisma.warehouse.findMany({
@@ -325,7 +353,10 @@ export default {
     }));
   },
 
-  // 위치 기준 재고
+  /**
+   * 위치(Location) 기준 자재 재고 집계
+   * (warehouse_id 로 선택 필터링, 대표 이미지 포함)
+   */
   async locationStock(data) {
     const where = {};
 
@@ -421,7 +452,10 @@ export default {
     }));
   },
 
-  // 선반 기준 재고
+  /**
+   * 선반(Shelf) 기준 자재 재고 집계 (좌표/크기 포함)
+   * warehouse_id, location_id 로 범위 필터 가능
+   */
   async shelfStock(data) {
     const where = {};
 
@@ -511,8 +545,18 @@ export default {
     }));
   },
 
-  // 재고 이동 처리
-  // 재고 이동 처리
+  /**
+   * 창고/위치 간 재고 이동
+   * 트랜잭션 흐름:
+   *   1) from/to Location 조회 → warehouse_id 파생
+   *   2) 출발 재고 조회 (수량 부족 검사)
+   *   3) 출발지 수량 차감
+   *   4) 도착 재고 조회 후 존재하면 증감, 없으면 새 Stock 생성
+   *   5) StockHistory TRANSFER_OUT / TRANSFER_IN 이력 양쪽 기록
+   *   6) STOCK 타입 알림 생성
+   * @param {{material_id:number,from_location_id:number,to_location_id:number,quantity:number}} data
+   * @param {Object} user 로그인 사용자 (updated_by, created_by 기록)
+   */
   async transfer(data, user) {
     const { material_id, from_location_id, to_location_id, quantity } = data;
 

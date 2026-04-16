@@ -2,13 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 태그 전체 리스트 (sort asc, id asc) */
   async getAllList() {
     return prisma.tag.findMany({
       orderBy: [{ sort: "asc" }, { id: "asc" }],
     });
   },
 
-  // 필터링 적용 리스트
+  /** 태그 리스트 (name 부분 매칭, material_id 로 연결된 태그만) */
   async getList(data) {
     const where = {};
     if (data?.name) {
@@ -26,6 +27,7 @@ export default {
     });
   },
 
+  /** 태그 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -36,6 +38,7 @@ export default {
     return item;
   },
 
+  /** 태그 단건 삭제 (MaterialTag cascade) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     return prisma.tag.delete({ where: { id } });
@@ -89,6 +92,10 @@ export default {
     });
   },
 
+  /**
+   * 태그 생성/수정 (name + sort 저장)
+   * @param {Prisma.TransactionClient} [tx=prisma]
+   */
   async save(data, tx = prisma) {
     const { id, name, sort } = data;
     const saveData = { name, sort: sort ?? 0 };
@@ -104,7 +111,7 @@ export default {
   },
 
   /**
-   * 자재에 연결된 태그 목록
+   * 특정 자재에 연결된 태그 목록 (tag.sort asc)
    */
   async getByMaterial(material_id) {
     if (!material_id) {
@@ -120,7 +127,8 @@ export default {
   },
 
   /**
-   * 자재-태그 연결 동기화 (전달된 tag_ids로 교체)
+   * 자재-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tag_ids 로 재생성)
+   * @param {{material_id:number, tag_ids:number[]}} param
    */
   async syncMaterialTags({ material_id, tag_ids = [] }) {
     if (!material_id) {

@@ -3,7 +3,10 @@ import AppError from "../errors/AppError.js";
 import bcrypt from "bcrypt";
 
 export default {
-  // 필터링 적용 리스트
+  /**
+   * 사용자 리스트 (role_id/키워드/기간 필터, role 조인)
+   * @param {{role_id?:number,keyword?:string,startDate?:string,endDate?:string}} data
+   */
   async getList(data) {
     const where = {};
 
@@ -51,7 +54,9 @@ export default {
     }));
   },
 
-  // 회원 아이피 리스트
+  /**
+   * 사용자 IP 화이트리스트 조회 (user_id 필터, user 조인, 최신순)
+   */
   async getUserIpList(data) {
     const where = {};
 
@@ -71,6 +76,7 @@ export default {
     return rows;
   },
 
+  /** 사용자 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -81,7 +87,7 @@ export default {
     return item;
   },
 
-  // 계정권한 설정
+  /** 사용자 역할(Role) 변경 */
   async setPermission(data) {
     return await prisma.user.update({
       where: { id: data.user_id },
@@ -91,8 +97,11 @@ export default {
     });
   },
 
-  // 아이피 정보 저장 처리
-  // 아이피 정보 일괄 저장 처리
+  /**
+   * 사용자 IP 화이트리스트 일괄 저장 (트랜잭션)
+   * - 각 item 에 id>0 이면 update, 없거나 0 이면 create
+   * @param {{user_id:number, ipList:Array}} data
+   */
   async batchIpSave(data) {
     const { user_id, ipList } = data;
     return await prisma.$transaction(async (tx) => {
@@ -129,7 +138,11 @@ export default {
     });
   },
 
-  // 아이피 정보 일괄 삭제
+  /**
+   * 사용자 IP 화이트리스트 일괄 삭제
+   * user_id 를 where 조건에 포함해 타 사용자 데이터 삭제 방지
+   * @param {{user_id:number, ipList:Array<{id:number}>}} data
+   */
   async batchIpDelete(data) {
     const { user_id, ipList } = data;
 
@@ -154,12 +167,15 @@ export default {
     return result;
   },
 
-  // 계정의 권한 정보 확인
+  /** (미구현) 계정 권한 그룹 조회 */
   async PermissionGrop(data) {
     const { user_id } = data;
   },
 
-  // 회원 계정 아이피 토글 여부
+  /**
+   * 사용자 IP 제한(ip_restrict) 플래그 토글
+   * @param {{user_id:number, ip_restrict:boolean}} data
+   */
   async ipToggle(data) {
     if (!data.user_id) {
       new AppError("회원 정보가 없습니다", 400, "NOT_FOUND");
@@ -182,7 +198,10 @@ export default {
     return result;
   },
 
-  // 신규 등록
+  /**
+   * 신규 사용자 등록 (username·email 중복 체크 → bcrypt 해시 → 역할 연결)
+   * @param {{name,username,email,password,role_id,is_active}} data
+   */
   async create(data) {
     const { name, username, email, password, role_id, is_active } = data;
 
@@ -226,7 +245,10 @@ export default {
     return true;
   },
 
-  // 수정처리
+  /**
+   * 사용자 정보 수정 (비밀번호는 별도 API: /changePassword)
+   * @param {{id,username,name,email,role_id,is_active}} data
+   */
   async update(data) {
     const { name, username, email, role_id, is_active } = data;
 

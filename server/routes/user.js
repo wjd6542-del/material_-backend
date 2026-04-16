@@ -7,51 +7,55 @@ import {
   updateSchema,
 } from "../validators/user.schema.js";
 
+/**
+ * 사용자(User) 라우트 (/api/user/*)
+ * 계정·역할·권한 관리 + 사용자별 IP 화이트리스트 관리
+ */
 export default async function userRoutes(app) {
-  // 계정 정보 조회 리스트
+  /** 사용자 리스트 조회 @route POST /api/user/list */
   app.post("/list", async (req) => {
     return userService.getList(req.body);
   });
 
-  // 계정 정보 조회
+  /** 사용자 단건 조회 (권한 포함) @route POST /api/user/:id */
   app.post("/:id", async (req) => {
     const params = validate(idParamSchema, req.params);
     return userService.getById(params.id);
   });
 
-  // 계정 권한 설정
+  /** 사용자 권한 개별 설정 @route POST /api/user/setPermission */
   app.post("/setPermission", async (req) => {
     const body = validate(idPermissionSchema, req.body);
     return userService.setPermission(body);
   });
 
-  // 계정 아이피 리스트
+  /** 사용자 IP 화이트리스트 조회 @route POST /api/user/ip/list */
   app.post("/ip/list", async (req) => {
     return userService.getUserIpList(req.body);
   });
 
-  // 계정 아이피 저장 처리
+  /** 사용자 IP 화이트리스트 일괄 저장 @route POST /api/user/ip/batchSave */
   app.post("/ip/batchSave", async (req) => {
     return userService.batchIpSave(req.body);
   });
 
-  // 아이피 일괄 삭제
+  /** 사용자 IP 화이트리스트 일괄 삭제 @route POST /api/user/ip/batchDelete */
   app.post("/ip/batchDelete", async (req) => {
     return userService.batchIpDelete(req.body);
   });
 
-  // 계정 아이피 적용활성화 수정여부
+  /** 사용자 IP 제한 활성/비활성 토글 @route POST /api/user/ip/toggle */
   app.post("/ip/toggle", async (req) => {
     return userService.ipToggle(req.body);
   });
 
-  // 계정 신규 등록
+  /** 사용자 신규 등록 (비밀번호 해싱 + 역할 연결) @route POST /api/user/create */
   app.post("/create", async (req) => {
     const body = validate(createSchema, req.body);
     return userService.create(body);
   });
 
-  // 계정 업데이트
+  /** 사용자 정보 수정 @route POST /api/user/update */
   app.post("/update", async (req) => {
     const body = validate(updateSchema, req.body);
     return userService.update(body);

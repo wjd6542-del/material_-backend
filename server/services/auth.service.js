@@ -5,12 +5,24 @@ import jwt from "jsonwebtoken";
 import { sendMail } from "../lib/mail.js";
 
 export default {
-  // 랜덤 6자리 코드
+  /**
+   * 6자리 랜덤 숫자 인증코드 생성 (이메일 인증용)
+   * @returns {string}
+   */
   generateCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   },
 
-  // 로그인
+  /**
+   * 사용자 로그인
+   * 1) username 조회 + role.permissions 포함
+   * 2) ip_restrict 사용자는 UserIpWhitelist 검증
+   * 3) bcrypt 비밀번호 비교
+   * 4) JWT 발급 (permissions 코드 배열 포함, 3h 만료)
+   * @param {{username:string,password:string}} data
+   * @param {string} ip 요청 IP
+   * @returns {Promise<{token:string,user:Object}>}
+   */
   async login(data, ip) {
     const { username, password } = data;
 
@@ -117,7 +129,11 @@ export default {
     };
   },
 
-  // 회원가입
+  /**
+   * 회원가입 (username·email 중복 검사 → USER 역할 부여 → bcrypt 해시 저장)
+   * @param {{name:string,username:string,email:string,password:string}} data
+   * @returns {Promise<boolean>}
+   */
   async signup(data) {
     const { name, username, email, password } = data;
 
@@ -178,7 +194,12 @@ export default {
     return true;
   },
 
-  // 회원 비밀번호 수정 처리
+  /**
+   * 로그인 사용자 비밀번호 변경 (기존 비밀번호 bcrypt 비교 → 신규 해시 저장)
+   * @param {number} userId 로그인 사용자 ID
+   * @param {{old_password:string,new_password:string}} data
+   * @returns {Promise<boolean>}
+   */
   async changePassword(userId, data) {
     const { old_password, new_password } = data;
 
@@ -223,7 +244,12 @@ export default {
     return true;
   },
 
-  // 이메일 인증 코드
+  /**
+   * 비밀번호 재설정용 6자리 인증코드를 사용자 이메일로 발송
+   * (User.code 에 임시 저장 후 Resend 이메일 전송)
+   * @param {{email:string}} data
+   * @returns {Promise<boolean>}
+   */
   async sendCode(data) {
     const { email } = data;
 
@@ -256,7 +282,11 @@ export default {
     return true;
   },
 
-  // 인증코드로 비밀번호 변경처리
+  /**
+   * 이메일 + 인증코드 검증 후 비밀번호 재설정 (bcrypt 해시 저장)
+   * @param {{email:string,code:string,password:string}} data
+   * @returns {Promise<boolean>}
+   */
   async codePasswordChange(data) {
     const { email, code, password } = data;
     const hash = await bcrypt.hash(password, 10);

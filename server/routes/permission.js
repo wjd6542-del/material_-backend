@@ -7,41 +7,51 @@ import {
   batchDeleteSchema,
 } from "../validators/permission.schema.js";
 
+/**
+ * 권한(Permission) 라우트 (/api/permission/*)
+ * 권한 코드 마스터 CRUD + 그룹별 조회
+ */
 export default async function permissionRoutes(app) {
+  /** 권한 전체 리스트 @route POST /api/permission/allList */
   app.post("/allList", async (req) => {
     return permissionService.getAllList(req.body);
   });
 
+  /** 권한 리스트 (검색 필터) @route POST /api/permission/list */
   app.post("/list", async (req) => {
     return permissionService.getList(req.body);
   });
 
+  /** 권한을 group 키 기준으로 묶어서 조회 (UI 권한 메뉴용) @route POST /api/permission/keyGroup */
   app.post("/keyGroup", async (req) => {
     return permissionService.getKeyGroup(req.body);
   });
 
+  /** 권한 단건 조회 @route GET /api/permission/:id */
   app.get("/:id", async (req) => {
     const params = validate(idParamSchema, req.params);
     return permissionService.getById(params.id);
   });
 
+  /** 권한 단건 삭제 @route POST /api/permission/delete */
   app.post("/delete", async (req) => {
     const params = validate(idParamSchema, req.body);
     return permissionService.deleteById(params.id);
   });
 
+  /** 권한 생성/수정 (code 고유) @route POST /api/permission/save */
   app.post("/save", async (req) => {
     const body = validate(saveSchema, req.body);
     return permissionService.save(body);
   });
 
-  // 일괄 저장
+  /** 권한 일괄 저장 @route POST /api/permission/batchSave */
   app.post("/batchSave", async (req) => {
     const body = validate(batchSaveSchema, req.body);
     return permissionService.batchSave(body);
   });
 
-  // 일괄 삭제
+  /** 권한 일괄 삭제 @route POST /api/permission/batchDelete */
   app.post("/batchDelete", async (req) => {
     const body = validate(batchDeleteSchema, req.body);
     return permissionService.batchDelete(body);

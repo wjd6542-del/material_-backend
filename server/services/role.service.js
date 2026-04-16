@@ -2,13 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 역할 전체 리스트 */
   async getAllList(data) {
     return prisma.role.findMany({
       orderBy: { sort: "asc" },
     });
   },
 
-  // 필터링 적용 리스트
+  /** 역할 리스트 (key/keys 필터, permissions 포함) */
   async getList(data) {
     const where = {};
     if (data?.key) {
@@ -31,6 +32,7 @@ export default {
     });
   },
 
+  /** 역할 단건 조회 (permissions 포함) */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -46,6 +48,7 @@ export default {
     return item;
   },
 
+  /** 역할 단건 삭제 */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     return prisma.role.delete({ where: { id } });
@@ -98,6 +101,10 @@ export default {
     return results;
   },
 
+  /**
+   * 역할 생성/수정 (id 없거나 0 → create, 아니면 update)
+   * @param {Prisma.TransactionClient} [tx=prisma]
+   */
   async save(data, tx = prisma) {
     if (!data.id || data.id === 0) {
       const createData = { ...data };
@@ -112,7 +119,11 @@ export default {
     });
   },
 
-  // 메뉴 권한 적용처리
+  /**
+   * 역할-권한 매핑 동기화 (트랜잭션)
+   * 기존 RolePermission 전부 삭제 후 permission_ids 로 재생성
+   * @param {{role_id:number, permission_ids:number[]}} data
+   */
   async permissionSave(data) {
     const { role_id, permission_ids } = data;
 

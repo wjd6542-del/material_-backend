@@ -2,13 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 설정 전체 리스트 */
   async getAllList(data) {
     return prisma.settings.findMany({
       orderBy: { sort: "asc" },
     });
   },
 
-  // 필터링 적용 리스트
+  /** 설정 리스트 (key/keys 필터) */
   async getList(data) {
     const where = {};
     if (data?.key) {
@@ -28,6 +29,7 @@ export default {
     });
   },
 
+  /** 설정 키 기준 그룹핑 */
   async getKeyGroup() {
     const res = await prisma.settings.groupBy({
       by: ["key"],
@@ -35,7 +37,7 @@ export default {
     return res;
   },
 
-  // 필터링 적용 리스트
+  /** UI용 축약 설정 리스트 (id/text/value) — 드롭다운 공급용 */
   async getViewList(data) {
     const where = {};
     if (data?.key) {
@@ -53,6 +55,7 @@ export default {
     });
   },
 
+  /** 설정 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -63,6 +66,7 @@ export default {
     return item;
   },
 
+  /** 설정 단건 삭제 */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     return prisma.settings.delete({ where: { id } });
@@ -115,6 +119,10 @@ export default {
     return results;
   },
 
+  /**
+   * 설정 생성/수정 (id 없거나 0 → create, 아니면 update)
+   * @param {Prisma.TransactionClient} [tx=prisma]
+   */
   async save(data, tx = prisma) {
     if (!data.id || data.id === 0) {
       const createData = { ...data };

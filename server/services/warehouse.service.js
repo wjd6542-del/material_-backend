@@ -2,13 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 창고 전체 리스트 (sort asc) */
   async getAllList() {
     return prisma.warehouse.findMany({
       orderBy: { sort: "asc" },
     });
   },
 
-  // 필터링 적용 리스트
+  /** 창고 리스트 (key/keys 필터, locations/stocks 포함) */
   async getList(data) {
     const where = {};
     if (data?.key) {
@@ -32,6 +33,7 @@ export default {
     });
   },
 
+  /** 창고 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -42,7 +44,12 @@ export default {
     return item;
   },
 
-  // 삭제처리
+  /**
+   * 창고 삭제 (트랜잭션)
+   * 1) 창고 소속 Location 의 Shelf 삭제
+   * 2) Location 삭제
+   * 3) Warehouse 삭제
+   */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -122,6 +129,9 @@ export default {
     return results;
   },
 
+  /**
+   * 창고 생성/수정 (id 없거나 0 이면 create, 아니면 update)
+   */
   async save(data) {
     const { id, ...saveData } = data;
 

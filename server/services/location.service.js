@@ -2,13 +2,14 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
+  /** 위치 전체 리스트 (sort asc) */
   async getAllList(data) {
     return prisma.location.findMany({
       orderBy: { sort: "asc" },
     });
   },
 
-  // 필터링 적용 리스트
+  /** 위치 리스트 (warehouse_id 필터, warehouse 조인) */
   async getList(data) {
     const where = {};
 
@@ -25,6 +26,7 @@ export default {
     });
   },
 
+  /** 위치 단건 조회 */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -35,6 +37,7 @@ export default {
     return item;
   },
 
+  /** 위치 단건 삭제 (트랜잭션으로 소속 Shelf 까지 cascade) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -93,6 +96,10 @@ export default {
     return results;
   },
 
+  /**
+   * 위치 생성/수정 (id 없거나 0 → create, 아니면 update)
+   * @param {Prisma.TransactionClient} [tx=prisma]
+   */
   async save(data, tx = prisma) {
     if (!data.id || data.id === 0) {
       const createData = { ...data };

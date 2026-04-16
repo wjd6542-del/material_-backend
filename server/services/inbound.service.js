@@ -3,6 +3,9 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
 export default {
+  /**
+   * 입고 전표 전체 리스트 (user, items 포함)
+   */
   async getAllList() {
     return prisma.inbound.findMany({
       include: {
@@ -12,7 +15,10 @@ export default {
     });
   },
 
-  // 입고 목록
+  /**
+   * 입고 전표 리스트 (inbound_no 검색, 기간 필터)
+   * 각 전표에 username / 입고번호 QR 포함 반환
+   */
   async getList(data) {
     const where = {};
 
@@ -49,7 +55,10 @@ export default {
     return result;
   },
 
-  // 입고 상세정보 리스트
+  /**
+   * 입고 아이템(InboundItem) 리스트 (자재/창고/위치/공급업체/기간 필터)
+   * @param {Object} data
+   */
   async detailList(data) {
     const where = {};
 
@@ -114,6 +123,9 @@ export default {
     return result;
   },
 
+  /**
+   * 입고 전표 단건 조회 (user/items/warehouse/material/location 포함)
+   */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
@@ -138,7 +150,15 @@ export default {
     return item;
   },
 
-  // 재고 처리
+  /**
+   * 재고(Stock) 증감 + StockHistory 이력 기록 헬퍼 (트랜잭션 내 호출 전용)
+   * @param {Prisma.TransactionClient} tx
+   * @param {{material_id:number,warehouse_id:number,location_id:number,unit_price?:number}} item
+   * @param {number} diffQty 증감값 (음수면 OUTBOUND 타입으로 기록)
+   * @param {string} refTable 참조 테이블명 (예: 'inbound', 'inbound_cancel')
+   * @param {number} refId 참조 레코드 ID
+   * @param {number} userId 처리자 ID
+   */
   async updateStock(tx, item, diffQty, refTable, refId, userId) {
     const stock = await tx.stock.findUnique({
       where: {
@@ -197,7 +217,8 @@ export default {
   },
 
   /**
-   * 일괄 삭제
+   * 입고 전표 일괄 삭제 (각 건별 deleteById 실행, 실패 건 인덱스 포함 에러)
+   * @param {Array<{id:number}>} data
    */
   async batchDelete(data = []) {
     if (!data.length) {
@@ -219,7 +240,10 @@ export default {
   },
 
   /**
-   * 입고 삭제
+   * 입고 전표 단건 삭제 (트랜잭션)
+   * - 각 InboundItem 에 대해 updateStock(-quantity) 호출 → 재고 롤백 + 이력 기록
+   * - Inbound cascade 로 InboundItem 정리
+   * @param {number} id
    */
   async deleteById(id) {
     return prisma.$transaction(async (tx) => {
@@ -252,7 +276,14 @@ export default {
   },
 
   /**
-   * 입고 저장
+   * 입고 전표 생성/수정 트랜잭션
+   * - id 없음: 신규 Inbound + items 생성 + 각 item 재고 증가
+   * - id 존재: 기존 items 재고를 한번 롤백(-qty) 후 수정 반영(+qty)
+   *   미포함된 기존 items 는 삭제하며 재고 롤백
+   * - 모든 item 변경 시 StockHistory 이력 기록
+   * - 알림(NotificationType.INBOUND) 생성
+   * @param {Object} data { id?, inbound_no, memo, items[] }
+   * @param {Object} user 로그인 사용자
    */
   async save(data, user) {
     return prisma.$transaction(async (tx) => {

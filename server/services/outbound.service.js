@@ -3,6 +3,9 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
 export default {
+  /**
+   * 출고 전표 전체 리스트 (user, items 포함)
+   */
   async getAllList() {
     return prisma.outbound.findMany({
       include: {
@@ -12,7 +15,12 @@ export default {
     });
   },
 
-  // 보드용 카운트
+  /**
+   * 출고 현황 집계 (보드 카드/대시보드용)
+   * - 전체 출고 전표 수
+   * - 아이템 수량/판매금액/원가금액/이익 합계
+   * - 자재명별 그룹 카운트 ($queryRaw 사용)
+   */
   async boardCount() {
     const totalCount = await prisma.outbound.count();
 
@@ -47,7 +55,10 @@ export default {
     };
   },
 
-  // 출고 목록
+  /**
+   * 출고 전표 리스트 (outbound_no 검색, 기간 필터, QR 포함)
+   * @param {Object} data
+   */
   async getList(data) {
     const where = {};
 
@@ -84,7 +95,9 @@ export default {
     return result;
   },
 
-  // 출고 상세 리스트
+  /**
+   * 출고 아이템(OutboundItem) 리스트 (자재/창고/위치/기간 필터)
+   */
   async detailList(data) {
     const where = {};
 
@@ -138,7 +151,10 @@ export default {
     return result;
   },
 
-  // 반품 리스트
+  /**
+   * 반품 가능 출고 아이템 목록 (반품 전표 작성 화면용)
+   * material_id / searchText(자재명·코드) / 기간 필터
+   */
   async returnList(data) {
     const where = {};
 
@@ -211,6 +227,9 @@ export default {
     return result;
   },
 
+  /**
+   * 출고 전표 단건 조회 (user/items 및 각 item 의 warehouse/material/location 포함)
+   */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400);
 
@@ -235,7 +254,16 @@ export default {
     return item;
   },
 
-  // 재고 처리
+  /**
+   * 출고용 재고 업데이트 + StockHistory 이력 기록 헬퍼 (트랜잭션 전용)
+   * (출고는 diffQty 가 음수로 호출되어 OUTBOUND 이력 생성)
+   * @param {Prisma.TransactionClient} tx
+   * @param {Object} item 출고 아이템
+   * @param {number} diffQty 증감값 (출고는 음수)
+   * @param {string} refTable 참조 테이블명
+   * @param {number} refId 참조 레코드 ID
+   * @param {number} userId 처리자 ID
+   */
   async updateStock(tx, item, diffQty, refTable, refId, userId) {
     const stock = await tx.stock.findUnique({
       where: {
@@ -289,7 +317,7 @@ export default {
   },
 
   /**
-   * 일괄 삭제
+   * 출고 전표 일괄 삭제 (각 건 deleteById 실행, 실패 건 인덱스 포함 에러)
    */
   async batchDelete(data = []) {
     if (!data.length) {
@@ -308,7 +336,9 @@ export default {
   },
 
   /**
-   * 출고 삭제
+   * 출고 전표 단건 삭제 (트랜잭션)
+   * - 각 OutboundItem 에 대해 updateStock(+quantity) 로 재고 복원 + 이력 기록
+   * - Outbound cascade 로 OutboundItem 정리
    */
   async deleteById(id) {
     return prisma.$transaction(async (tx) => {
@@ -341,7 +371,15 @@ export default {
   },
 
   /**
-   * 출고 저장
+   * 출고 전표 생성/수정 트랜잭션
+   * - id 없음: outbound_no 중복 체크 → Outbound + OutboundItem 생성
+   *   각 item 별로 Stock 이동평균 원가 기반 cost_price 산출, 판매금액·원가금액·이익 계산
+   *   재고 차감 + StockHistory(OUTBOUND) 기록, 재고 부족 시 에러
+   * - id 존재: 기존 items 재고 롤백 → 수정 반영 → 재고 차감
+   *   미포함된 기존 items 는 삭제(재고 복원)
+   * - 알림(NotificationType.OUTBOUND) 생성
+   * @param {Object} data { id?, outbound_no, memo, items[] }
+   * @param {Object} user 로그인 사용자
    */
   async save(data, user) {
     return prisma.$transaction(async (tx) => {
