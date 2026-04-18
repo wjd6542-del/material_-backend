@@ -1,7 +1,7 @@
 # 자재관리 서버 (material-server) 아키텍처 & 모델 설계 분석
 
-> 작성일: 2026-04-16
-> 대상 커밋: `main` @ 61e0a55 기준
+> 작성일: 2026-04-18
+> 대상 커밋: `main` @ f766372 기준 (+ Business 모델 추가)
 > 범위: `/server` 전체 + `/prisma/schema.prisma`
 
 ---
@@ -48,14 +48,14 @@ server/
 ├── middleware/
 │   ├── permission.js       # 권한 코드 preHandler (is_super 우회)
 │   └── auditRequest.js     # (레거시) Express 스타일 미들웨어
-├── routes/                 # 20개 도메인 라우트 (파일명이 곧 /api/<name> prefix)
-├── services/               # 20개 서비스 (도메인별 비즈니스 로직)
+├── routes/                 # 21개 도메인 라우트 (파일명이 곧 /api/<name> prefix)
+├── services/               # 21개 서비스 (도메인별 비즈니스 로직)
 ├── validators/             # Zod 스키마
 ├── utils/qrcode.js
 └── uploads/                # 업로드된 자재 이미지 실제 저장 경로
 ```
 
-**자동 라우트 로드**: `index.js` 가 `routes/` 디렉토리를 읽어 모든 `*.js` 를 `/api/<파일명>` prefix 로 자동 등록한다. 라우트를 추가하려면 파일만 떨어뜨리면 된다.
+**자동 라우트 로드**: `index.js` 가 `routes/` 디렉토리를 읽어 모든 `*.js` 를 `/api/<파일명>` prefix 로 자동 등록한다. 라우트를 추가하려면 파일만 떨어뜨리면 된다 (예: `business.js` 추가 → `/api/business/*` 즉시 활성).
 
 ---
 
@@ -137,6 +137,7 @@ deleteById(id), batchDelete(rows), batchSave(rows), save(row, tx?)
 | 계정·권한 | `Role`, `User`, `UserIpWhitelist`, `Permission`, `RolePermission` |
 | 자재 | `MaterialCategory`, `Material`, `MaterialImage`, `Tag`, `MaterialTag` |
 | 공급업체 | `Supplier` |
+| 사업자 | `Business` |
 | 물리적 위치 | `Warehouse` → `Location` → `Shelf` |
 | 재고 & 이력 | `Stock`, `StockHistory` |
 | 거래 전표 | `Inbound/InboundItem`, `Outbound/OutboundItem`, `ReturnOrder/ReturnOrderItem` |
@@ -309,6 +310,7 @@ StockDailySnapshot (date, material_id, warehouse_id) quantity
 | `/api/category` | 자재 카테고리 트리 | path/depth, 자식→부모 순 삭제 |
 | `/api/tag` | 태그 + 자재-태그 매핑 | `syncMaterialTags` 재동기화 |
 | `/api/supplier` | 공급업체 | |
+| `/api/business` | 사업자(등록번호·회사명·대표·주소·연락처·FAX) | 독립 마스터, 공통 CRUD 6종 |
 | `/api/warehouse` | 창고 (도면 좌표 포함) | 삭제 시 Location/Shelf cascade |
 | `/api/location` | 창고 내 위치 | |
 | `/api/shelf` | 위치 내 선반 | x/y/w/h 도면 좌표 |
