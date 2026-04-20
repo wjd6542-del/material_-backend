@@ -203,14 +203,15 @@ model MaterialTag {
 
 /// 자재 공급업체
 model Supplier {
-    id Int @id @default(autoincrement())
-
-    name  String // 업체명
-    phone String? // 연락처
-    email String? // 이메일
-    memo  String? // 메모
-
-    sort Int @default(0)
+    id             Int     @id @default(autoincrement())
+    name           String // 업체명
+    phone          String? // 연락처
+    email          String? // 이메일
+    memo           String? // 메모
+    zipcode        String? // 우편번호
+    address        String? // 기본주소
+    address_detail String? // 상세주소
+    sort           Int     @default(0)
 
     created_at DateTime @default(now())
 
