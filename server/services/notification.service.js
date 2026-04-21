@@ -58,7 +58,7 @@ export default {
 
   /**
    * 미읽음 알림을 NotificationType 별로 집계
-   * (고정 키 INBOUND/OUTBOUND/MATERIAL/RETURNORDER 초기값 0 보장)
+   * (고정 키 INBOUND/OUTBOUND/MATERIAL/RETURNORDER/PURCHASEORDER 초기값 0 보장)
    */
   async countByType(data, user) {
     const rows = await prisma.notification.groupBy({
@@ -76,6 +76,7 @@ export default {
       OUTBOUND: 0,
       MATERIAL: 0,
       RETURNORDER: 0,
+      PURCHASEORDER: 0,
     };
 
     rows.forEach((r) => {

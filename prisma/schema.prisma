@@ -45,6 +45,15 @@ enum FileTargetType {
     USER
 }
 
+/// 발주 상태
+/// draft: 임시저장, ordered: 발주완료, received: 입고완료, canceled: 취소
+enum PurchaseOrderStatus {
+    draft
+    ordered
+    received
+    canceled
+}
+
 //////////////////////////////////////////////////////////////
 // 권한 / 사용자
 //////////////////////////////////////////////////////////////
@@ -144,13 +153,14 @@ model Material {
     inbound_items  InboundItem[]
     outbound_items OutboundItem[]
 
-    stockHistories      StockHistory[]
-    stockDailySnapshots StockDailySnapshot[]
-    inboundDailyStats   InboundDailyStat[]
-    outboundDailyStats  OutboundDailyStat[]
-    returnOrderItems    ReturnOrderItem[]
-    returnDailyStats    ReturnDailyStat[]
-    tags                MaterialTag[]
+    stockHistories       StockHistory[]
+    stockDailySnapshots  StockDailySnapshot[]
+    inboundDailyStats    InboundDailyStat[]
+    outboundDailyStats   OutboundDailyStat[]
+    returnOrderItems     ReturnOrderItem[]
+    returnDailyStats     ReturnDailyStat[]
+    tags                 MaterialTag[]
+    purchase_order_items PurchaseOrderItem[]
 }
 
 /// 자재 이미지 (다중 첨부 지원)
@@ -215,8 +225,10 @@ model Supplier {
 
     created_at DateTime @default(now())
 
-    inbound_items  InboundItem[] // 이 업체를 통해 입고된 품목
-    outbound_items OutboundItem[] // 이 업체로 출고된 품목
+    inbound_items        InboundItem[] // 이 업체를 통해 입고된 품목
+    outbound_items       OutboundItem[] // 이 업체로 출고된 품목
+    purchase_orders      PurchaseOrder[] // 이 업체로 발주한 전표
+    purchase_order_items PurchaseOrderItem[] // 이 업체로 발주한 품목
 }
 
 //////////////////////////////////////////////////////////////
@@ -491,6 +503,63 @@ model OutboundItem {
 }
 
 //////////////////////////////////////////////////////////////
+// 발주
+//////////////////////////////////////////////////////////////
+
+/// 발주 전표 (헤더)
+model PurchaseOrder {
+    id Int @id @default(autoincrement())
+
+    order_no String @unique // 발주 번호 (고유, 예: PO-1713712345678)
+
+    supplier_id Int
+    supplier    Supplier @relation(fields: [supplier_id], references: [id]) // 거래처
+
+    order_date    DateTime? // 발주일자
+    delivery_date DateTime? // 납기일자
+
+    status      PurchaseOrderStatus @default(draft) // 상태
+    vat_applied Boolean             @default(true) // 부가세 적용 여부
+
+    memo String? // 메모
+
+    created_by Int? // 등록자 ID
+    updated_by Int? // 마지막 수정자 ID
+
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+
+    items PurchaseOrderItem[] // 발주 품목 목록
+
+    @@index([supplier_id])
+}
+
+/// 발주 품목 (라인)
+model PurchaseOrderItem {
+    id Int @id @default(autoincrement())
+
+    purchase_order_id Int // 발주 기본키
+    material_id       Int // 자재 기본키
+    supplier_id       Int // 거래처 (헤더와 동일, 조회 편의용 비정규화)
+
+    quantity Int // 발주 수량
+
+    price         Decimal @db.Decimal(15, 2) // 단가
+    supply_amount Decimal @db.Decimal(18, 2) // 공급가액
+    vat           Decimal @default(0) @db.Decimal(18, 2) // 부가세 (vat_applied=true일 때만)
+
+    memo String? // 메모
+
+    purchaseOrder PurchaseOrder @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade)
+    material      Material      @relation(fields: [material_id], references: [id])
+    supplier      Supplier      @relation(fields: [supplier_id], references: [id])
+
+    @@index([purchase_order_id])
+    @@index([material_id])
+    @@index([supplier_id])
+}
+
+//////////////////////////////////////////////////////////////
 // 파일 첨부
 //////////////////////////////////////////////////////////////
 
@@ -671,6 +740,7 @@ enum NotificationType {
     MATERIAL
     RETURNORDER
     STOCK
+    PURCHASEORDER
     SYSTEM
 }
 
