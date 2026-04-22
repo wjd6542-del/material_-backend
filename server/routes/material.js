@@ -7,6 +7,7 @@ import {
   saveSchema,
   updateSchema,
   batchDeleteSchema,
+  priceHistoryListSchema,
 } from "../validators/material.schema.js";
 
 /**
@@ -36,6 +37,15 @@ export default async function materialRoutes(app) {
    */
   app.post("/newMonthMaterial", async (req) => {
     return materialService.newMonthMaterial(req.body);
+  });
+
+  /**
+   * 자재 가격 이력 조회 (역방향 페이지네이션, 변경자 이름 포함)
+   * @route POST /api/material/priceHistory
+   */
+  app.post("/priceHistory", async (req) => {
+    const body = validate(priceHistoryListSchema, req.body);
+    return materialService.getPriceHistory(body);
   });
 
   /**

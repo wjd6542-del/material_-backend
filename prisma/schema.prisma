@@ -141,6 +141,21 @@ model Material {
 
   safety_stock Int @default(0) // 안전 재고량 (이하일 때 경고)
 
+  // 가격 항목 (변동 시 MaterialPriceHistory 에 이력 기록)
+  inbound_price    Decimal @default(0) @db.Decimal(15, 2) // 구매 단가 (기준값)
+  outbound_price1  Decimal @default(0) @db.Decimal(15, 2) // 판매1
+  outbound_price2  Decimal @default(0) @db.Decimal(15, 2) // 판매2
+  wholesale_price1 Decimal @default(0) @db.Decimal(15, 2) // 도매1
+  wholesale_price2 Decimal @default(0) @db.Decimal(15, 2) // 도매2
+  online_price     Decimal @default(0) @db.Decimal(15, 2) // 온라인
+
+  // 비율 (기준가 대비, 프론트 자동계산용. 구매 단가는 기준값이라 제외)
+  outbound_rate1  Decimal @default(0) @db.Decimal(7, 4) // 판매1 비율
+  outbound_rate2  Decimal @default(0) @db.Decimal(7, 4) // 판매2 비율
+  wholesale_rate1 Decimal @default(0) @db.Decimal(7, 4) // 도매1 비율
+  wholesale_rate2 Decimal @default(0) @db.Decimal(7, 4) // 도매2 비율
+  online_rate     Decimal @default(0) @db.Decimal(7, 4) // 온라인 비율
+
   memo String? // 메모
 
   is_active Boolean @default(true) // 사용 여부
@@ -163,6 +178,39 @@ model Material {
   returnDailyStats     ReturnDailyStat[]
   tags                 MaterialTag[]
   purchase_order_items PurchaseOrderItem[]
+  priceHistories       MaterialPriceHistory[]
+}
+
+/// 자재 가격 변동 이력 (등록·수정 시 6개 가격 스냅샷)
+/// - 한 번 저장 시 1행 (모든 가격 필드를 함께 저장)
+/// - UPDATE 액션: 6개 가격 중 하나라도 변경된 경우에만 기록
+model MaterialPriceHistory {
+  id Int @id @default(autoincrement())
+
+  material_id Int
+
+  inbound_price    Decimal @db.Decimal(15, 2)
+  outbound_price1  Decimal @db.Decimal(15, 2)
+  outbound_price2  Decimal @db.Decimal(15, 2)
+  wholesale_price1 Decimal @db.Decimal(15, 2)
+  wholesale_price2 Decimal @db.Decimal(15, 2)
+  online_price     Decimal @db.Decimal(15, 2)
+
+  outbound_rate1  Decimal @default(0) @db.Decimal(7, 4)
+  outbound_rate2  Decimal @default(0) @db.Decimal(7, 4)
+  wholesale_rate1 Decimal @default(0) @db.Decimal(7, 4)
+  wholesale_rate2 Decimal @default(0) @db.Decimal(7, 4)
+  online_rate     Decimal @default(0) @db.Decimal(7, 4)
+
+  action     String  @db.VarChar(10) // CREATE | UPDATE
+  changed_by Int? // 변경자 ID (User.id, 미로그인 저장 대비 nullable)
+  reason     String? @db.VarChar(255) // 변경 사유 (선택)
+
+  created_at DateTime @default(now())
+
+  material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
+
+  @@index([material_id, created_at])
 }
 
 /// 자재 이미지 (다중 첨부 지원)

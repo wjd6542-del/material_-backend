@@ -12,6 +12,62 @@ const MATERIAL_INCLUDE = {
   tags: { include: { tag: true } },
 };
 
+/** 이력으로 추적하는 가격·비율 컬럼 목록 (변경 감지 및 스냅샷 저장 대상) */
+const PRICE_FIELDS = [
+  // 가격 6종
+  "inbound_price",
+  "outbound_price1",
+  "outbound_price2",
+  "wholesale_price1",
+  "wholesale_price2",
+  "online_price",
+  // 비율 5종 (구매는 기준값이라 제외)
+  "outbound_rate1",
+  "outbound_rate2",
+  "wholesale_rate1",
+  "wholesale_rate2",
+  "online_rate",
+];
+
+/**
+ * 객체에서 가격 6종만 추출해 숫자로 정규화 (Decimal → Number, null/undefined → 0)
+ * @param {Record<string, any>} obj
+ * @returns {Record<string, number>}
+ */
+function pickPrices(obj) {
+  const out = {};
+  for (const k of PRICE_FIELDS) {
+    out[k] = Number(obj?.[k] ?? 0);
+  }
+  return out;
+}
+
+/** 두 가격 스냅샷 비교 (정규화된 number 비교) */
+function pricesDiffer(before, after) {
+  return PRICE_FIELDS.some((k) => before[k] !== after[k]);
+}
+
+/**
+ * MaterialPriceHistory 1행 기록 (트랜잭션 내 호출)
+ * @param {Prisma.TransactionClient} tx
+ * @param {number} materialId
+ * @param {Record<string, number>} prices
+ * @param {"CREATE"|"UPDATE"} action
+ * @param {number|null} changedBy
+ * @param {string|null} [reason]
+ */
+async function insertPriceHistory(tx, materialId, prices, action, changedBy, reason = null) {
+  await tx.materialPriceHistory.create({
+    data: {
+      material_id: materialId,
+      ...prices,
+      action,
+      changed_by: changedBy,
+      reason,
+    },
+  });
+}
+
 /** MaterialTag 중간 테이블을 풀어서 tags 배열을 평탄화한다. */
 function flattenTags(row) {
   return { ...row, tags: row.tags.map((t) => t.tag) };
@@ -145,6 +201,46 @@ export default {
       orderBy: { created_at: "desc" },
       take,
     });
+  },
+
+  /**
+   * 자재 가격 이력 리스트 (역방향 페이지네이션, changed_by 이름 포함)
+   * @param {{material_id:number, beforeId?:number, limit?:number}} data
+   * @returns {Promise<Array<{...MaterialPriceHistory, changed_by_name:string}>>}
+   */
+  async getPriceHistory(data) {
+    const materialId = Number(data?.material_id);
+    if (!materialId) {
+      throw new AppError("material_id 가 필요합니다.", 400, "INVALID_ID");
+    }
+
+    const limit = Math.min(Math.max(Number(data?.limit) || 50, 1), 200);
+    const beforeId = data?.beforeId ? Number(data.beforeId) : undefined;
+
+    const rows = await prisma.materialPriceHistory.findMany({
+      where: {
+        material_id: materialId,
+        ...(beforeId ? { id: { lt: beforeId } } : {}),
+      },
+      orderBy: { id: "desc" },
+      take: limit,
+    });
+
+    const userIds = [...new Set(rows.map((r) => r.changed_by).filter((v) => v != null))];
+
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, username: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return rows.map((r) => ({
+      ...r,
+      changed_by_name: userMap.get(r.changed_by)?.name ?? "",
+      changed_by_username: userMap.get(r.changed_by)?.username ?? "",
+    }));
   },
 
   /**
@@ -323,6 +419,7 @@ export default {
     try {
       return await prisma.$transaction(async (tx) => {
         let post;
+        let oldPrices = null;
 
         if (isCreate) {
           const exist = await tx.material.findUnique({
@@ -339,6 +436,8 @@ export default {
             throw new Error("게시글이 존재하지 않습니다.");
           }
 
+          oldPrices = pickPrices(existing);
+
           post = await tx.material.update({
             where: { id },
             data: fields,
@@ -352,6 +451,16 @@ export default {
 
         if (tagIds !== undefined) {
           await syncMaterialTags(tx, post.id, tagIds);
+        }
+
+        // 가격 이력 기록
+        // - CREATE: 항상 스냅샷 1행 저장
+        // - UPDATE: 6개 가격 중 하나라도 변경됐을 때만 저장
+        const newPrices = pickPrices(post);
+        if (isCreate) {
+          await insertPriceHistory(tx, post.id, newPrices, "CREATE", user?.id ?? null);
+        } else if (pricesDiffer(oldPrices, newPrices)) {
+          await insertPriceHistory(tx, post.id, newPrices, "UPDATE", user?.id ?? null);
         }
 
         return post;

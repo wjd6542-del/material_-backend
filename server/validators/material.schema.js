@@ -4,6 +4,27 @@ export const idParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+/** 가격 6종 + 비율 5종 공통 필드 (저장/수정 스키마에서 재사용) */
+const priceFields = {
+  inbound_price: z.coerce.number().min(0).optional(),
+  outbound_price1: z.coerce.number().min(0).optional(),
+  outbound_price2: z.coerce.number().min(0).optional(),
+  wholesale_price1: z.coerce.number().min(0).optional(),
+  wholesale_price2: z.coerce.number().min(0).optional(),
+  online_price: z.coerce.number().min(0).optional(),
+  outbound_rate1: z.coerce.number().min(0).optional(),
+  outbound_rate2: z.coerce.number().min(0).optional(),
+  wholesale_rate1: z.coerce.number().min(0).optional(),
+  wholesale_rate2: z.coerce.number().min(0).optional(),
+  online_rate: z.coerce.number().min(0).optional(),
+};
+
+export const priceHistoryListSchema = z.object({
+  material_id: z.coerce.number().int().positive(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  beforeId: z.coerce.number().int().positive().optional(),
+});
+
 export const saveSchema = z.object({
   id: z.coerce.number().optional(),
 
@@ -35,6 +56,8 @@ export const saveSchema = z.object({
   memo: z.coerce.string().optional(),
   is_active: z.coerce.boolean().optional(),
   safety_stock: z.coerce.number().optional(),
+
+  ...priceFields,
 
   tag_ids: z
     .union([z.array(z.coerce.number().int().positive()), z.string()])
@@ -82,6 +105,8 @@ export const updateSchema = z.object({
   memo: z.coerce.string().optional(),
   is_active: z.coerce.boolean().optional(),
   safety_stock: z.coerce.number().optional(),
+
+  ...priceFields,
 
   deleteImageIds: z
     .string()
