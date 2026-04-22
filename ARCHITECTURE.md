@@ -1,7 +1,8 @@
 # 자재관리 서버 (material-server) 아키텍처 & 모델 설계 분석
 
-> 작성일: 2026-04-18
-> 대상 커밋: `main` @ f766372 기준 (+ Business 모델 추가)
+> 작성일: 2026-04-18 (최종 갱신: 2026-04-22)
+> 대상 커밋: `main` @ f766372 기준
+> 추가 반영: Business · PurchaseOrder · Chat(Socket.IO) · Supplier 주소 확장 · 메시지 soft delete
 > 범위: `/server` 전체 + `/prisma/schema.prisma`
 
 ---
@@ -15,13 +16,14 @@ Fastify + Prisma(MySQL) 기반 자재·창고·재고·입출고·반품·통계
 | --- | --- |
 | 런타임 | Node.js (ESM, `"type": "module"`) |
 | 웹 프레임워크 | Fastify 4.x |
+| 실시간 통신 | **Socket.IO 4.x** (채팅 전용) |
 | ORM / DB | Prisma 5.x / MySQL |
 | 인증 | JWT (3h 만료) + bcrypt + Resend(이메일 인증) |
 | 검증 | Zod 4.x |
 | 스케줄러 | node-cron (매일 00:10 Asia/Seoul 일별 통계) |
 | 파일 업로드 | @fastify/multipart (최대 20MB × 10개) |
 | 기타 | qrcode, nodemailer/resend, dayjs |
-| 포트 | 3001 |
+| 포트 | 3001 (HTTP + Socket.IO 공용) |
 
 ---
 
@@ -48,8 +50,9 @@ server/
 ├── middleware/
 │   ├── permission.js       # 권한 코드 preHandler (is_super 우회)
 │   └── auditRequest.js     # (레거시) Express 스타일 미들웨어
-├── routes/                 # 21개 도메인 라우트 (파일명이 곧 /api/<name> prefix)
-├── services/               # 21개 서비스 (도메인별 비즈니스 로직)
+├── routes/                 # 도메인 라우트 (파일명이 곧 /api/<name> prefix)
+├── services/               # 도메인별 비즈니스 로직
+├── socket/                 # Socket.IO 이벤트 핸들러 (chat.socket.js)
 ├── validators/             # Zod 스키마
 ├── utils/qrcode.js
 └── uploads/                # 업로드된 자재 이미지 실제 저장 경로
@@ -97,6 +100,30 @@ Client ──▶ Fastify
 3. **IP 화이트리스트**: `User.ip_restrict=true` 사용자에게만 적용, super 는 우회
 4. **권한 코드(RBAC)**: `permission("inbound.view")` 등 preHandler 로 적용
 
+### 3.2 실시간 파이프라인 (Socket.IO)
+
+HTTP 라우트와는 별개 경로로, 동일 HTTP 서버의 `upgrade` 이벤트에 부착된다.
+
+```
+Client(socket.io-client) ──▶ ws://host:3001/socket.io
+         │
+         ├─ io.use(authMw)      ← JWT 검증 (handshake.auth.token 또는 Authorization 헤더)
+         │   └─ socket.user = { id, username, is_super }
+         │
+         ├─ connection
+         │   └─ socket.join(`user:${userId}`)  ← 개인 룸 자동 참여
+         │
+         └─ 이벤트 핸들러 (server/socket/chat.socket.js)
+             ├─ room:join / room:leave
+             ├─ message:send   → chatService.sendMessage → 방 멤버 user:{id} 에 message:new
+             ├─ message:read   → chatService.markRead    → chat:{roomId} 에 message:read
+             └─ message:delete → chatService.deleteMessage → 방 멤버 user:{id} 에 message:deleted
+```
+
+- **인증**: Fastify 의 onRequest 훅은 `/api/*` 만 검사하므로 소켓은 `io.use(...)` 에서 직접 JWT 검증
+- **룸 2종**: `user:{id}` (개인 배지용, 연결 시 자동 참여) / `chat:{roomId}` (현재 관람 중 방)
+- **브로드캐스트 전략**: 새 메시지는 방 멤버 전원의 `user:{id}` 룸으로 emit → 관람 여부와 무관하게 배지·리스트 갱신 가능
+
 ---
 
 ## 4. 계층 아키텍처
@@ -136,11 +163,13 @@ deleteById(id), batchDelete(rows), batchSave(rows), save(row, tx?)
 | --- | --- |
 | 계정·권한 | `Role`, `User`, `UserIpWhitelist`, `Permission`, `RolePermission` |
 | 자재 | `MaterialCategory`, `Material`, `MaterialImage`, `Tag`, `MaterialTag` |
-| 공급업체 | `Supplier` |
+| 공급업체 | `Supplier` (zipcode·address·address_detail 포함) |
 | 사업자 | `Business` |
 | 물리적 위치 | `Warehouse` → `Location` → `Shelf` |
 | 재고 & 이력 | `Stock`, `StockHistory` |
 | 거래 전표 | `Inbound/InboundItem`, `Outbound/OutboundItem`, `ReturnOrder/ReturnOrderItem` |
+| 발주 | `PurchaseOrder/PurchaseOrderItem` (enum `PurchaseOrderStatus`) |
+| 채팅 | `ChatRoom`, `ChatRoomMember`, `ChatMessage` (enum `ChatRoomType`) |
 | 파일·감사·알림 | `Attachment`, `AuditLog`, `Notification` |
 | 집계·통계 | `StockDailySnapshot`, `InboundDailyStat`, `OutboundDailyStat`, `ReturnDailyStat` |
 | 공통 | `Settings`, `Category` |
@@ -269,6 +298,88 @@ StockDailySnapshot (date, material_id, warehouse_id) quantity
 - cron 배치가 매일 00:10 (KST) 에 `create*DailyStat()` 호출 → 해당일 데이터 deleteMany 후 createMany (멱등)
 - 수동 재집계 API (`/api/stat/inbound/daily` 등) 는 동일 메서드를 호출해 재처리 가능
 
+### 5.9 발주(PurchaseOrder)
+
+입고와 별도로 **구매 요청 단계의 전표** 를 관리한다. 입고와 달리 재고에 즉시 영향을 주지 않는다.
+
+```
+PurchaseOrder (헤더)                PurchaseOrderItem (라인)
+  - order_no (PO-<timestamp>)         - material_id
+  - supplier_id                       - supplier_id (헤더와 동일, 조회 편의용 비정규화)
+  - order_date / delivery_date        - quantity / price
+  - status (draft|ordered|            - supply_amount / vat
+            received|canceled)        - memo
+  - vat_applied (bool)
+  - memo
+```
+
+- **상태 전이**: `draft → ordered → received | canceled` (enum `PurchaseOrderStatus`)
+- **재고 연동 없음**: 실제 재고 증가는 `Inbound` 생성 시점에만 발생. 발주는 예정 정보
+- **QR 지원**: `order_no` 로 QR 코드 생성 (리스트/단건 응답에 포함)
+- **알림**: 생성/수정 시 `Notification(type=PURCHASEORDER)` 발급
+- **detailList 패턴**: 입고와 동일하게 `/api/purchaseOrder/detail/list` 에서 `PurchaseOrderItem` 단위 평탄화 조회 + material/supplier/기간 필터 지원
+
+### 5.10 채팅(Chat) — 하이브리드 REST + Socket.IO
+
+직원간 실시간 메시지. 이력·목록은 REST, 실시간 송수신은 Socket.IO 로 책임 분리.
+
+```
+ChatRoom
+  - type: PUBLIC | DM       (enum ChatRoomType)
+  - name                    (PUBLIC 전용, DM 은 null)
+  - dm_key (unique)         ("min(a,b)_max(a,b)" 포맷, DM 쌍 중복 방지)
+
+ChatRoomMember (방 ↔ 사용자)
+  - last_read_at            (미읽음 카운트 계산용)
+  - joined_at
+  - UNIQUE(room_id, user_id)
+
+ChatMessage
+  - sender_id, content (Text)
+  - is_deleted / deleted_at / deleted_by   ← soft delete
+  - INDEX(room_id, created_at)             ← 방별 타임라인 조회 최적화
+```
+
+**핵심 설계 포인트**
+
+| 주제 | 선택 |
+| --- | --- |
+| 방 유형 | PUBLIC(전체 공지방, 자동 참여) + DM(1:1) 두 가지 |
+| DM 중복 방지 | `dm_key = min(a,b)_max(a,b)` 문자열을 UNIQUE 로 건 get-or-create |
+| 멤버십 검증 | 모든 조회/쓰기 메서드가 `assertMember(roomId, userId)` 선행 |
+| 미읽음 수 | `chatMessage.count({ sender_id ≠ me, created_at > last_read_at })` per room |
+| 전송 후처리 | 트랜잭션으로 message 생성 + room.updated_at 갱신 + 본인 last_read_at = now |
+| 삭제 정책 | **Soft delete** + 권한: 본인(`sender_id === user.id`) OR `is_super` |
+| 삭제 응답 마스킹 | `is_deleted=true` 인 메시지는 서비스 계층에서 `content=""` 로 교체해 반환 (원본은 DB 보존) |
+| 실시간 | Socket.IO 이벤트: `message:new` / `message:read` / `message:deleted` |
+| 클라이언트 배지 | 방 멤버 전원의 `user:{id}` 룸으로 브로드캐스트해 관람 여부와 무관하게 배지·리스트 갱신 |
+
+**REST 엔드포인트 요약** (`/api/chat/*`)
+
+| Path | 설명 |
+| --- | --- |
+| `/public/ensure` | 전체 공지방 보장 + 자동 참여 |
+| `/dm` | DM 방 get-or-create |
+| `/rooms` | 내 방 목록 (마지막 메시지 + 미읽음 + DM 상대) |
+| `/room` | 방 단건 (members 포함) |
+| `/messages` | 메시지 이력 (역방향 페이지네이션, `beforeId`) |
+| `/read` | 읽음 처리 (last_read_at = now) |
+| `/unreadCount` | 헤더 배지용 전체 미읽음 합계 |
+| `/leave` | 방 나가기 (DM 금지) |
+| `/users` | DM 대상 유저 목록 (본인 제외, is_active) |
+| `/message/delete` | 메시지 소프트 삭제 (본인/관리자) |
+
+**Socket 이벤트 요약** — 상세는 §3.2
+
+- C→S: `room:join`, `room:leave`, `message:send`, `message:read`, `message:delete`
+- S→C: `message:new`, `message:read`, `message:deleted`, `connect_error`
+
+**설계 결정 배경**
+
+- REST 이력 조회를 유지한 이유: 새로고침/탭 전환 후 재동기화·페이지네이션 캐싱이 HTTP 쪽이 단순함
+- 소켓을 병행한 이유: 실시간성 요구(타이핑감, 즉시 반영)가 polling 으로 커버 불가
+- Soft delete 이유: 감사성·복구 가능성 + "삭제된 메시지입니다" 플레이스홀더로 대화 흐름 보존
+
 ---
 
 ## 6. 대표 트랜잭션 흐름
@@ -318,8 +429,10 @@ StockDailySnapshot (date, material_id, warehouse_id) quantity
 | `/api/inbound` | 입고 전표 | permission("inbound.*") 적용 |
 | `/api/outbound` | 출고 전표 | 원가/이익 고정, 반품 대상 조회 |
 | `/api/returnorder` | 반품 전표 | 상태 전이, 재고 반영 |
+| `/api/purchaseOrder` | 발주 전표 | draft/ordered/received/canceled 상태, detail/list 평탄화 조회, PURCHASEORDER 알림 |
+| `/api/chat` | 채팅(REST 측) | 방 목록·이력·읽음·미읽음·삭제. 실시간은 Socket.IO |
 | `/api/user` `/role` `/permission` | 계정·역할·권한 마스터 | RBAC 기반 |
-| `/api/notification` | 알림 조회/읽음 | 유형별 카운트 |
+| `/api/notification` | 알림 조회/읽음 | 유형별 카운트 (INBOUND/OUTBOUND/MATERIAL/RETURNORDER/PURCHASEORDER) |
 | `/api/auditLog` | 감사 로그 | permission("dashboard.view") |
 | `/api/settings` | 시스템 설정 | key/value 동적 |
 | `/api/stat` | 일별 통계 생성/조회/차트 | cron 과 동일 메서드 |
@@ -357,6 +470,8 @@ StockDailySnapshot (date, material_id, warehouse_id) quantity
 - `.env` 필수 키: `DATABASE_URL`, `API_KEY`, `JWT_SECRET`, `MAIL_KEY`
 - `npx prisma migrate dev --name <변경이름>` → `npx prisma generate`
 - 서버 기동: `npm run dev` (= `node server/index.js`, 기본 포트 3001, 0.0.0.0 바인딩)
+- **HTTP + Socket.IO 공용 포트**: 3001 하나로 둘 다 서빙. 소켓 경로는 기본값 `/socket.io/*`. 리버스 프록시 배치 시 `Upgrade`/`Connection` 헤더 포워딩 필수
+- **Socket.IO CORS**: `origin: true` 로 모든 오리진 허용 중 → 운영에서는 화이트리스트로 좁힐 것
 - 정적 리소스: `/uploads/*` 는 `process.cwd()/uploads` 로 매핑
 - 배치 활성화: `server/index.js` 상단 `// import "./cron/cron.js";` 주석 해제
 - 타임존: 서버 기동 시스템의 TZ 와 무관하게 cron 은 `Asia/Seoul`, 통계 집계도 KST 기준(`getDateRange`)
@@ -365,4 +480,4 @@ StockDailySnapshot (date, material_id, warehouse_id) quantity
 
 ## 10. 요약
 
-이 서버는 **"재고(Stock) = 자재×창고×위치×선반 4축의 실시간 수량" + "StockHistory = 모든 움직임의 완전한 이력"** 이라는 두 축 위에 입고·출고·반품 전표가 얹어진 구조다. 모든 DB 변경은 자동 감사되고, 일 단위 집계 테이블이 대시보드 쿼리를 분리해 받쳐준다. RBAC·IP 화이트리스트·API Key 로 보안이 3중으로 잠겨 있고, 20개의 도메인 라우트는 파일을 추가하는 것만으로 자동 등록된다. 설계 의도가 일관되어 있어 확장성과 감사성 양쪽이 잘 확보된 소형 자재관리 WMS 구조라고 평가할 수 있다.
+이 서버는 **"재고(Stock) = 자재×창고×위치×선반 4축의 실시간 수량" + "StockHistory = 모든 움직임의 완전한 이력"** 이라는 두 축 위에 입고·출고·반품·발주 전표가 얹어진 구조다. 모든 DB 변경은 자동 감사되고, 일 단위 집계 테이블이 대시보드 쿼리를 분리해 받쳐준다. RBAC·IP 화이트리스트·API Key 로 보안이 3중으로 잠겨 있고, 도메인 라우트는 파일을 추가하는 것만으로 자동 등록된다. 직원간 실시간 협업은 Socket.IO 기반 채팅(전체 공지방 + 1:1 DM, soft delete) 이 HTTP 레이어와 공존한다. 설계 의도가 일관되어 있어 확장성과 감사성 양쪽이 잘 확보된 소형 자재관리 WMS 구조라고 평가할 수 있다.

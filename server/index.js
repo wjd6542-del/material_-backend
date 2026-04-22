@@ -6,10 +6,12 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
+import { Server as SocketIOServer } from "socket.io";
 
 import errorHandlerPlugin from "./plugins/errorHandler.plugin.js";
 
 import auditHook from "./plugins/auditHook.js";
+import { attachChatSocket } from "./socket/chat.socket.js";
 
 // 통계용 자동 크론
 // import "./cron/cron.js";
@@ -144,6 +146,21 @@ for (const file of routeFiles) {
 
   console.log(`✅ Route loaded: ${prefix}`);
 }
+
+// ----------------------------
+// ✅ Socket.IO 부착 (채팅 실시간)
+// ----------------------------
+await app.ready();
+
+const io = new SocketIOServer(app.server, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
+
+attachChatSocket(io);
+console.log("✅ Socket.IO attached: /socket.io");
 
 // ----------------------------
 // 서버 시작

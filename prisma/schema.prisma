@@ -1,10 +1,10 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "mysql"
-    url      = env("DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 //////////////////////////////////////////////////////////////
@@ -15,43 +15,43 @@ datasource db {
 /// INBOUND: 입고, OUTBOUND: 출고, RETURNORDER: 반품
 /// TRANSFER_IN/OUT: 창고 간 이동, ADJUST: 재고 조정
 enum StockType {
-    INBOUND
-    OUTBOUND
-    RETURNORDER
-    TRANSFER_IN
-    TRANSFER_OUT
-    ADJUST
+  INBOUND
+  OUTBOUND
+  RETURNORDER
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUST
 }
 
 /// 감사 로그 액션 유형
 enum LogAction {
-    CREATE
-    UPDATE
-    DELETE
-    UPSERT
-    CREATEMANY
-    UPSERTMANY
-    DELETEMANY
-    VIEW
-    LOGIN
-    LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  UPSERT
+  CREATEMANY
+  UPSERTMANY
+  DELETEMANY
+  VIEW
+  LOGIN
+  LOGOUT
 }
 
 /// 파일 첨부 대상 유형
 enum FileTargetType {
-    MATERIAL
-    INBOUND
-    OUTBOUND
-    USER
+  MATERIAL
+  INBOUND
+  OUTBOUND
+  USER
 }
 
 /// 발주 상태
 /// draft: 임시저장, ordered: 발주완료, received: 입고완료, canceled: 취소
 enum PurchaseOrderStatus {
-    draft
-    ordered
-    received
-    canceled
+  draft
+  ordered
+  received
+  canceled
 }
 
 //////////////////////////////////////////////////////////////
@@ -60,46 +60,48 @@ enum PurchaseOrderStatus {
 
 /// 사용자 역할 (관리자, 일반 사용자 등)
 model Role {
-    id          Int     @id @default(autoincrement())
-    name        String  @unique // 역할 이름 (고유)
-    description String? // 역할 설명
-    is_super    Boolean @default(false) // 슈퍼 관리자 여부
-    sort        Int     @default(0) // 정렬 순서
+  id          Int     @id @default(autoincrement())
+  name        String  @unique // 역할 이름 (고유)
+  description String? // 역할 설명
+  is_super    Boolean @default(false) // 슈퍼 관리자 여부
+  sort        Int     @default(0) // 정렬 순서
 
-    users User[]
+  users User[]
 
-    created_at  DateTime         @default(now())
-    permissions RolePermission[]
+  created_at  DateTime         @default(now())
+  permissions RolePermission[]
 }
 
 /// 시스템 사용자
 model User {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    username String @unique @db.VarChar(100) // 로그인 아이디 (고유)
-    password String @db.VarChar(255) // 해시된 비밀번호
+  username String @unique @db.VarChar(100) // 로그인 아이디 (고유)
+  password String @db.VarChar(255) // 해시된 비밀번호
 
-    name  String  @db.VarChar(100) // 실명
-    email String? @db.VarChar(200) // 이메일
-    code  String? @db.VarChar(15) // 사번 또는 식별 코드
+  name  String  @db.VarChar(100) // 실명
+  email String? @db.VarChar(200) // 이메일
+  code  String? @db.VarChar(15) // 사번 또는 식별 코드
 
-    role_id Int
-    role    Role @relation(fields: [role_id], references: [id]) // 역할 참조
+  role_id Int
+  role    Role @relation(fields: [role_id], references: [id]) // 역할 참조
 
-    is_active   Boolean @default(true) // 계정 활성화 여부
-    ip_restrict Boolean @default(false) // IP 제한 사용 여부 (true면 화이트리스트만 접근 가능)
+  is_active   Boolean @default(true) // 계정 활성화 여부
+  ip_restrict Boolean @default(false) // IP 제한 사용 여부 (true면 화이트리스트만 접근 가능)
 
-    last_login DateTime? // 마지막 로그인 일시
+  last_login DateTime? // 마지막 로그인 일시
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-    logs             AuditLog[]
-    inbound          Inbound[]
-    outbound         Outbound[]
-    notifications    Notification[]
-    userIpWhitelists UserIpWhitelist[]
-    returnOrders     ReturnOrder[]
+  logs             AuditLog[]
+  inbound          Inbound[]
+  outbound         Outbound[]
+  notifications    Notification[]
+  userIpWhitelists UserIpWhitelist[]
+  returnOrders     ReturnOrder[]
+  chatMembers      ChatRoomMember[]
+  chatMessages     ChatMessage[]
 }
 
 //////////////////////////////////////////////////////////////
@@ -108,103 +110,103 @@ model User {
 
 /// 자재 분류 카테고리
 model MaterialCategory {
-    id       Int    @id @default(autoincrement())
-    name     String @unique // 카테고리명 (고유)
-    code     String @default("") // 분류 코드
-    sort     Int    @default(0)
-    parentId Int?   @map("parent_id")
-    // 추가 권장 필드
-    path     String @default("") // 예: "1/5/12/30/" (ID 경로 저장)
-    depth    Int    @default(1) // 현재 뎁스 (1~10 제한용)
+  id       Int    @id @default(autoincrement())
+  name     String @unique // 카테고리명 (고유)
+  code     String @default("") // 분류 코드
+  sort     Int    @default(0)
+  parentId Int?   @map("parent_id")
+  // 추가 권장 필드
+  path     String @default("") // 예: "1/5/12/30/" (ID 경로 저장)
+  depth    Int    @default(1) // 현재 뎁스 (1~10 제한용)
 
-    parent    MaterialCategory?  @relation("CategoryToCategory", fields: [parentId], references: [id])
-    children  MaterialCategory[] @relation("CategoryToCategory")
-    materials Material[]
+  parent    MaterialCategory?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children  MaterialCategory[] @relation("CategoryToCategory")
+  materials Material[]
 
-    @@index([path]) // 경로 검색 최적화
+  @@index([path]) // 경로 검색 최적화
 }
 
 /// 자재 마스터
 model Material {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    code String @unique @db.VarChar(50) // 자재 코드 (고유)
-    name String @db.VarChar(200) // 자재명
+  code String @unique @db.VarChar(50) // 자재 코드 (고유)
+  name String @db.VarChar(200) // 자재명
 
-    category_id Int?
-    category    MaterialCategory? @relation(fields: [category_id], references: [id])
+  category_id Int?
+  category    MaterialCategory? @relation(fields: [category_id], references: [id])
 
-    spec String? @db.VarChar(200) // 규격/사양
-    unit String  @db.VarChar(20) // 단위 (개, kg, m 등)
+  spec String? @db.VarChar(200) // 규격/사양
+  unit String  @db.VarChar(20) // 단위 (개, kg, m 등)
 
-    safety_stock Int @default(0) // 안전 재고량 (이하일 때 경고)
+  safety_stock Int @default(0) // 안전 재고량 (이하일 때 경고)
 
-    memo String? // 메모
+  memo String? // 메모
 
-    is_active Boolean @default(true) // 사용 여부
+  is_active Boolean @default(true) // 사용 여부
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
-    sort       Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  sort       Int      @default(0)
 
-    images MaterialImage[]
+  images MaterialImage[]
 
-    stocks         Stock[]
-    inbound_items  InboundItem[]
-    outbound_items OutboundItem[]
+  stocks         Stock[]
+  inbound_items  InboundItem[]
+  outbound_items OutboundItem[]
 
-    stockHistories       StockHistory[]
-    stockDailySnapshots  StockDailySnapshot[]
-    inboundDailyStats    InboundDailyStat[]
-    outboundDailyStats   OutboundDailyStat[]
-    returnOrderItems     ReturnOrderItem[]
-    returnDailyStats     ReturnDailyStat[]
-    tags                 MaterialTag[]
-    purchase_order_items PurchaseOrderItem[]
+  stockHistories       StockHistory[]
+  stockDailySnapshots  StockDailySnapshot[]
+  inboundDailyStats    InboundDailyStat[]
+  outboundDailyStats   OutboundDailyStat[]
+  returnOrderItems     ReturnOrderItem[]
+  returnDailyStats     ReturnDailyStat[]
+  tags                 MaterialTag[]
+  purchase_order_items PurchaseOrderItem[]
 }
 
 /// 자재 이미지 (다중 첨부 지원)
 model MaterialImage {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    material_id Int
+  material_id Int
 
-    file_url  String // 접근 가능한 파일 URL
-    file_name String // 저장된 파일명
-    org_name  String // 원본 파일명
+  file_url  String // 접근 가능한 파일 URL
+  file_name String // 저장된 파일명
+  org_name  String // 원본 파일명
 
-    sort Int @default(0) // 이미지 정렬 순서
+  sort Int @default(0) // 이미지 정렬 순서
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
 
-    @@index([material_id])
+  @@index([material_id])
 }
 
 /// 태그 마스터 (자재와 독립적으로 관리)
 model Tag {
-    id         Int      @id @default(autoincrement())
-    name       String   @unique // 태그명 (고유)
-    sort       Int      @default(0) // 정렬 순서
-    created_at DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  name       String   @unique // 태그명 (고유)
+  sort       Int      @default(0) // 정렬 순서
+  created_at DateTime @default(now())
 
-    materials MaterialTag[]
+  materials MaterialTag[]
 }
 
 /// 자재-태그 연결 (다대다)
 model MaterialTag {
-    id          Int      @id @default(autoincrement())
-    material_id Int
-    tag_id      Int
-    created_at  DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  material_id Int
+  tag_id      Int
+  created_at  DateTime @default(now())
 
-    material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
-    tag      Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
 
-    @@unique([material_id, tag_id])
-    @@index([material_id])
-    @@index([tag_id])
+  @@unique([material_id, tag_id])
+  @@index([material_id])
+  @@index([tag_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -213,22 +215,22 @@ model MaterialTag {
 
 /// 자재 공급업체
 model Supplier {
-    id             Int     @id @default(autoincrement())
-    name           String // 업체명
-    phone          String? // 연락처
-    email          String? // 이메일
-    memo           String? // 메모
-    zipcode        String? // 우편번호
-    address        String? // 기본주소
-    address_detail String? // 상세주소
-    sort           Int     @default(0)
+  id             Int     @id @default(autoincrement())
+  name           String // 업체명
+  phone          String? // 연락처
+  email          String? // 이메일
+  memo           String? // 메모
+  zipcode        String? // 우편번호
+  address        String? // 기본주소
+  address_detail String? // 상세주소
+  sort           Int     @default(0)
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    inbound_items        InboundItem[] // 이 업체를 통해 입고된 품목
-    outbound_items       OutboundItem[] // 이 업체로 출고된 품목
-    purchase_orders      PurchaseOrder[] // 이 업체로 발주한 전표
-    purchase_order_items PurchaseOrderItem[] // 이 업체로 발주한 품목
+  inbound_items        InboundItem[] // 이 업체를 통해 입고된 품목
+  outbound_items       OutboundItem[] // 이 업체로 출고된 품목
+  purchase_orders      PurchaseOrder[] // 이 업체로 발주한 전표
+  purchase_order_items PurchaseOrderItem[] // 이 업체로 발주한 품목
 }
 
 //////////////////////////////////////////////////////////////
@@ -237,19 +239,19 @@ model Supplier {
 
 /// 사업자 정보
 model Business {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    registration_no String    @unique @db.VarChar(20) // 사업자 등록번호
-    company_name    String    @db.VarChar(200) // 회사명
-    ceo_name        String    @db.VarChar(100) // 대표명
-    zipcode         String?   @db.VarChar(500) // 주소
-    address         String?   @db.VarChar(500) // 주소
-    address_detail  String?   @db.VarChar(500) // 주소
-    phone           String?   @db.VarChar(50) // 대표 연락처
-    mobile          String?   @db.VarChar(50) // 대표 연락처
-    fax             String?   @db.VarChar(50) // FAX
-    created_at      DateTime  @default(now())
-    updated_at      DateTime? @updatedAt
+  registration_no String    @unique @db.VarChar(20) // 사업자 등록번호
+  company_name    String    @db.VarChar(200) // 회사명
+  ceo_name        String    @db.VarChar(100) // 대표명
+  zipcode         String?   @db.VarChar(500) // 주소
+  address         String?   @db.VarChar(500) // 주소
+  address_detail  String?   @db.VarChar(500) // 주소
+  phone           String?   @db.VarChar(50) // 대표 연락처
+  mobile          String?   @db.VarChar(50) // 대표 연락처
+  fax             String?   @db.VarChar(50) // FAX
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
 }
 
 //////////////////////////////////////////////////////////////
@@ -258,24 +260,24 @@ model Business {
 
 /// 창고 마스터 (지도/도면 표시 지원)
 model Warehouse {
-    id         Int      @id @default(autoincrement())
-    code       String   @unique @db.VarChar(50) // 창고 코드 (고유)
-    name       String // 창고명
-    memo       String? // 메모
-    sort       Int      @default(0)
-    created_at DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  code       String   @unique @db.VarChar(50) // 창고 코드 (고유)
+  name       String // 창고명
+  memo       String? // 메모
+  sort       Int      @default(0)
+  created_at DateTime @default(now())
 
-    points   Json? // 도면 상 다각형 좌표 (JSON 배열)
-    rotation Float   @default(0) // 도면 회전각 (도 단위)
-    color    String? // 도면 표시 색상 (hex 코드)
+  points   Json? // 도면 상 다각형 좌표 (JSON 배열)
+  rotation Float   @default(0) // 도면 회전각 (도 단위)
+  color    String? // 도면 표시 색상 (hex 코드)
 
-    locations           Location[]
-    stocks              Stock[]
-    stockHistories      StockHistory[]
-    inboundItems        InboundItem[]
-    outboundItems       OutboundItem[]
-    stockDailySnapshots StockDailySnapshot[]
-    returnOrderItems    ReturnOrderItem[]
+  locations           Location[]
+  stocks              Stock[]
+  stockHistories      StockHistory[]
+  inboundItems        InboundItem[]
+  outboundItems       OutboundItem[]
+  stockDailySnapshots StockDailySnapshot[]
+  returnOrderItems    ReturnOrderItem[]
 }
 
 //////////////////////////////////////////////////////////////
@@ -284,24 +286,24 @@ model Warehouse {
 
 /// 창고 내 위치 (구역, 열 등)
 model Location {
-    id               Int               @id @default(autoincrement())
-    warehouse_id     Int
-    warehouse        Warehouse         @relation(fields: [warehouse_id], references: [id])
-    code             String            @db.VarChar(50) // 위치 코드 (창고 내 고유)
-    name             String? // 위치명 (선택)
-    sort             Int               @default(0)
-    points           Json? // 도면 상 다각형 좌표
-    rotation         Float             @default(0) // 도면 회전각
-    color            String? // 도면 표시 색상
-    created_at       DateTime          @default(now())
-    shelves          Shelf[]
-    stocks           Stock[]
-    inboundItems     InboundItem[]
-    outboundItems    OutboundItem[]
-    stockHistories   StockHistory[]
-    returnOrderItems ReturnOrderItem[]
+  id               Int               @id @default(autoincrement())
+  warehouse_id     Int
+  warehouse        Warehouse         @relation(fields: [warehouse_id], references: [id])
+  code             String            @db.VarChar(50) // 위치 코드 (창고 내 고유)
+  name             String? // 위치명 (선택)
+  sort             Int               @default(0)
+  points           Json? // 도면 상 다각형 좌표
+  rotation         Float             @default(0) // 도면 회전각
+  color            String? // 도면 표시 색상
+  created_at       DateTime          @default(now())
+  shelves          Shelf[]
+  stocks           Stock[]
+  inboundItems     InboundItem[]
+  outboundItems    OutboundItem[]
+  stockHistories   StockHistory[]
+  returnOrderItems ReturnOrderItem[]
 
-    @@unique([warehouse_id, code]) // 창고 내 위치 코드 중복 불가
+  @@unique([warehouse_id, code]) // 창고 내 위치 코드 중복 불가
 }
 
 //////////////////////////////////////////////////////////////
@@ -310,25 +312,25 @@ model Location {
 
 /// 위치 내 선반 (세부 적재 위치)
 model Shelf {
-    id          Int      @id @default(autoincrement())
-    location_id Int
-    location    Location @relation(fields: [location_id], references: [id])
-    code        String   @db.VarChar(50) // 선반 코드 (위치 내 고유)
-    name        String? // 선반명 (선택)
-    x           Int      @default(0) // 도면 X 좌표
-    y           Int      @default(0) // 도면 Y 좌표
-    width       Int      @default(0) // 도면 너비
-    height      Int      @default(0) // 도면 높이
-    sort        Int      @default(0)
-    created_at  DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  location_id Int
+  location    Location @relation(fields: [location_id], references: [id])
+  code        String   @db.VarChar(50) // 선반 코드 (위치 내 고유)
+  name        String? // 선반명 (선택)
+  x           Int      @default(0) // 도면 X 좌표
+  y           Int      @default(0) // 도면 Y 좌표
+  width       Int      @default(0) // 도면 너비
+  height      Int      @default(0) // 도면 높이
+  sort        Int      @default(0)
+  created_at  DateTime @default(now())
 
-    stocks           Stock[]
-    inboundItems     InboundItem[]
-    outboundItems    OutboundItem[]
-    stockHistories   StockHistory[]
-    returnOrderItems ReturnOrderItem[]
+  stocks           Stock[]
+  inboundItems     InboundItem[]
+  outboundItems    OutboundItem[]
+  stockHistories   StockHistory[]
+  returnOrderItems ReturnOrderItem[]
 
-    @@unique([location_id, code]) // 위치 내 선반 코드 중복 불가
+  @@unique([location_id, code]) // 위치 내 선반 코드 중복 불가
 }
 
 //////////////////////////////////////////////////////////////
@@ -337,68 +339,68 @@ model Shelf {
 
 /// 현재 재고 (자재 × 창고 × 위치 × 선반 단위의 실시간 수량)
 model Stock {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    material_id  Int
-    warehouse_id Int
-    location_id  Int
-    shelf_id     Int? // 선반 미지정 가능
+  material_id  Int
+  warehouse_id Int
+  location_id  Int
+  shelf_id     Int? // 선반 미지정 가능
 
-    quantity Int @default(0) // 현재 재고 수량
+  quantity Int @default(0) // 현재 재고 수량
 
-    avg_cost    Decimal @default(0) @db.Decimal(15, 2) // 이동평균 단가
-    stock_value Decimal @default(0) @db.Decimal(18, 2) // 재고 평가금액 (수량 × 평균단가)
+  avg_cost    Decimal @default(0) @db.Decimal(15, 2) // 이동평균 단가
+  stock_value Decimal @default(0) @db.Decimal(18, 2) // 재고 평가금액 (수량 × 평균단가)
 
-    updated_by Int? // 마지막 수정자 ID
-    updated_at DateTime @updatedAt
+  updated_by Int? // 마지막 수정자 ID
+  updated_at DateTime @updatedAt
 
-    material  Material  @relation(fields: [material_id], references: [id], onDelete: Cascade)
-    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
-    location  Location  @relation(fields: [location_id], references: [id])
-    shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
+  material  Material  @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+  location  Location  @relation(fields: [location_id], references: [id])
+  shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
 
-    histories StockHistory[]
+  histories StockHistory[]
 
-    @@unique([material_id, warehouse_id, location_id, shelf_id]) // 동일 위치의 중복 재고 행 방지
+  @@unique([material_id, warehouse_id, location_id, shelf_id]) // 동일 위치의 중복 재고 행 방지
 }
 
 /// 재고 변동 이력 (입고·출고·반품·조정 등 모든 변동 기록)
 model StockHistory {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    material_id  Int
-    warehouse_id Int
-    stock_id     Int? // 연결된 재고 레코드 (삭제 시 null)
-    location_id  Int
-    shelf_id     Int?
+  material_id  Int
+  warehouse_id Int
+  stock_id     Int? // 연결된 재고 레코드 (삭제 시 null)
+  location_id  Int
+  shelf_id     Int?
 
-    type StockType // 변동 유형 (INBOUND, OUTBOUND 등)
+  type StockType // 변동 유형 (INBOUND, OUTBOUND 등)
 
-    quantity Int // 변동 수량
+  quantity Int // 변동 수량
 
-    before_qty Int // 변동 전 수량
-    after_qty  Int // 변동 후 수량
+  before_qty Int // 변동 전 수량
+  after_qty  Int // 변동 후 수량
 
-    unit_cost Decimal? @db.Decimal(15, 2) // 단가
-    amount    Decimal? @db.Decimal(18, 2) // 금액
+  unit_cost Decimal? @db.Decimal(15, 2) // 단가
+  amount    Decimal? @db.Decimal(18, 2) // 금액
 
-    ref_table String? // 참조 테이블명 (예: inbound_items)
-    ref_id    Int? // 참조 레코드 ID
+  ref_table String? // 참조 테이블명 (예: inbound_items)
+  ref_id    Int? // 참조 레코드 ID
 
-    memo String? // 메모
+  memo String? // 메모
 
-    created_by Int? // 처리자 ID
+  created_by Int? // 처리자 ID
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    material  Material  @relation(fields: [material_id], references: [id])
-    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
-    stock     Stock?    @relation(fields: [stock_id], references: [id])
-    location  Location? @relation(fields: [location_id], references: [id])
-    shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
+  material  Material  @relation(fields: [material_id], references: [id])
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+  stock     Stock?    @relation(fields: [stock_id], references: [id])
+  location  Location? @relation(fields: [location_id], references: [id])
+  shelf     Shelf?    @relation(fields: [shelf_id], references: [id])
 
-    @@index([material_id])
-    @@index([warehouse_id])
+  @@index([material_id])
+  @@index([warehouse_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -407,46 +409,46 @@ model StockHistory {
 
 /// 입고 전표 (헤더)
 model Inbound {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    inbound_no String @unique // 입고 번호 (고유, 예: IN-20240401-001)
+  inbound_no String @unique // 입고 번호 (고유, 예: IN-20240401-001)
 
-    user_id Int
-    user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
 
-    memo String? // 메모
+  memo String? // 메모
 
-    created_by Int? // 등록자 ID
-    updated_by Int? // 마지막 수정자 ID
+  created_by Int? // 등록자 ID
+  updated_by Int? // 마지막 수정자 ID
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-    items InboundItem[] // 입고 품목 목록
+  items InboundItem[] // 입고 품목 목록
 }
 
 /// 입고 품목 (라인)
 model InboundItem {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    inbound_id   Int
-    material_id  Int
-    supplier_id  Int? // 공급업체 (선택)
-    warehouse_id Int
-    location_id  Int
-    shelf_id     Int // 선반 (필수)
+  inbound_id   Int
+  material_id  Int
+  supplier_id  Int? // 공급업체 (선택)
+  warehouse_id Int
+  location_id  Int
+  shelf_id     Int // 선반 (필수)
 
-    quantity Int // 입고 수량
+  quantity Int // 입고 수량
 
-    unit_price Decimal @db.Decimal(15, 2) // 단가
-    amount     Decimal @db.Decimal(18, 2) // 금액 (수량 × 단가)
+  unit_price Decimal @db.Decimal(15, 2) // 단가
+  amount     Decimal @db.Decimal(18, 2) // 금액 (수량 × 단가)
 
-    inbound   Inbound   @relation(fields: [inbound_id], references: [id], onDelete: Cascade)
-    material  Material  @relation(fields: [material_id], references: [id])
-    supplier  Supplier? @relation(fields: [supplier_id], references: [id])
-    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
-    location  Location  @relation(fields: [location_id], references: [id])
-    shelf     Shelf     @relation(fields: [shelf_id], references: [id])
+  inbound   Inbound   @relation(fields: [inbound_id], references: [id], onDelete: Cascade)
+  material  Material  @relation(fields: [material_id], references: [id])
+  supplier  Supplier? @relation(fields: [supplier_id], references: [id])
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+  location  Location  @relation(fields: [location_id], references: [id])
+  shelf     Shelf     @relation(fields: [shelf_id], references: [id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -455,51 +457,51 @@ model InboundItem {
 
 /// 출고 전표 (헤더)
 model Outbound {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    outbound_no String @unique // 출고 번호 (고유, 예: OUT-20240401-001)
+  outbound_no String @unique // 출고 번호 (고유, 예: OUT-20240401-001)
 
-    user_id Int
-    user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
 
-    memo String? // 메모
+  memo String? // 메모
 
-    created_by Int? // 등록자 ID
-    updated_by Int? // 마지막 수정자 ID
+  created_by Int? // 등록자 ID
+  updated_by Int? // 마지막 수정자 ID
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-    items OutboundItem[] // 출고 품목 목록
+  items OutboundItem[] // 출고 품목 목록
 }
 
 /// 출고 품목 (라인)
 model OutboundItem {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    outbound_id  Int
-    material_id  Int
-    supplier_id  Int // 거래처 (필수)
-    warehouse_id Int
-    location_id  Int
-    shelf_id     Int // 선반 (필수)
+  outbound_id  Int
+  material_id  Int
+  supplier_id  Int // 거래처 (필수)
+  warehouse_id Int
+  location_id  Int
+  shelf_id     Int // 선반 (필수)
 
-    quantity Int // 출고 수량
+  quantity Int // 출고 수량
 
-    sale_price  Decimal @db.Decimal(15, 2) // 판매 단가
-    sale_amount Decimal @db.Decimal(18, 2) // 판매 금액
+  sale_price  Decimal @db.Decimal(15, 2) // 판매 단가
+  sale_amount Decimal @db.Decimal(18, 2) // 판매 금액
 
-    cost_price  Decimal @db.Decimal(15, 2) // 원가 단가 (이동평균)
-    cost_amount Decimal @db.Decimal(18, 2) // 원가 금액
+  cost_price  Decimal @db.Decimal(15, 2) // 원가 단가 (이동평균)
+  cost_amount Decimal @db.Decimal(18, 2) // 원가 금액
 
-    profit Decimal @db.Decimal(18, 2) // 이익 (판매금액 - 원가금액)
+  profit Decimal @db.Decimal(18, 2) // 이익 (판매금액 - 원가금액)
 
-    outbound  Outbound  @relation(fields: [outbound_id], references: [id], onDelete: Cascade)
-    material  Material  @relation(fields: [material_id], references: [id])
-    supplier  Supplier  @relation(fields: [supplier_id], references: [id])
-    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
-    location  Location  @relation(fields: [location_id], references: [id])
-    shelf     Shelf     @relation(fields: [shelf_id], references: [id])
+  outbound  Outbound  @relation(fields: [outbound_id], references: [id], onDelete: Cascade)
+  material  Material  @relation(fields: [material_id], references: [id])
+  supplier  Supplier  @relation(fields: [supplier_id], references: [id])
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+  location  Location  @relation(fields: [location_id], references: [id])
+  shelf     Shelf     @relation(fields: [shelf_id], references: [id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -508,55 +510,55 @@ model OutboundItem {
 
 /// 발주 전표 (헤더)
 model PurchaseOrder {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    order_no String @unique // 발주 번호 (고유, 예: PO-1713712345678)
+  order_no String @unique // 발주 번호 (고유, 예: PO-1713712345678)
 
-    supplier_id Int
-    supplier    Supplier @relation(fields: [supplier_id], references: [id]) // 거래처
+  supplier_id Int
+  supplier    Supplier @relation(fields: [supplier_id], references: [id]) // 거래처
 
-    order_date    DateTime? // 발주일자
-    delivery_date DateTime? // 납기일자
+  order_date    DateTime? // 발주일자
+  delivery_date DateTime? // 납기일자
 
-    status      PurchaseOrderStatus @default(draft) // 상태
-    vat_applied Boolean             @default(true) // 부가세 적용 여부
+  status      PurchaseOrderStatus @default(draft) // 상태
+  vat_applied Boolean             @default(true) // 부가세 적용 여부
 
-    memo String? // 메모
+  memo String? // 메모
 
-    created_by Int? // 등록자 ID
-    updated_by Int? // 마지막 수정자 ID
+  created_by Int? // 등록자 ID
+  updated_by Int? // 마지막 수정자 ID
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-    items PurchaseOrderItem[] // 발주 품목 목록
+  items PurchaseOrderItem[] // 발주 품목 목록
 
-    @@index([supplier_id])
+  @@index([supplier_id])
 }
 
 /// 발주 품목 (라인)
 model PurchaseOrderItem {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    purchase_order_id Int // 발주 기본키
-    material_id       Int // 자재 기본키
-    supplier_id       Int // 거래처 (헤더와 동일, 조회 편의용 비정규화)
+  purchase_order_id Int // 발주 기본키
+  material_id       Int // 자재 기본키
+  supplier_id       Int // 거래처 (헤더와 동일, 조회 편의용 비정규화)
 
-    quantity Int // 발주 수량
+  quantity Int // 발주 수량
 
-    price         Decimal @db.Decimal(15, 2) // 단가
-    supply_amount Decimal @db.Decimal(18, 2) // 공급가액
-    vat           Decimal @default(0) @db.Decimal(18, 2) // 부가세 (vat_applied=true일 때만)
+  price         Decimal @db.Decimal(15, 2) // 단가
+  supply_amount Decimal @db.Decimal(18, 2) // 공급가액
+  vat           Decimal @default(0) @db.Decimal(18, 2) // 부가세 (vat_applied=true일 때만)
 
-    memo String? // 메모
+  memo String? // 메모
 
-    purchaseOrder PurchaseOrder @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade)
-    material      Material      @relation(fields: [material_id], references: [id])
-    supplier      Supplier      @relation(fields: [supplier_id], references: [id])
+  purchaseOrder PurchaseOrder @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade)
+  material      Material      @relation(fields: [material_id], references: [id])
+  supplier      Supplier      @relation(fields: [supplier_id], references: [id])
 
-    @@index([purchase_order_id])
-    @@index([material_id])
-    @@index([supplier_id])
+  @@index([purchase_order_id])
+  @@index([material_id])
+  @@index([supplier_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -565,20 +567,20 @@ model PurchaseOrderItem {
 
 /// 범용 파일 첨부 (자재·입고·출고·사용자 등 다양한 대상에 연결)
 model Attachment {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    target_type FileTargetType // 첨부 대상 유형
-    target_id   Int // 첨부 대상 레코드 ID
+  target_type FileTargetType // 첨부 대상 유형
+  target_id   Int // 첨부 대상 레코드 ID
 
-    path     String // 서버 내 파일 경로
-    filename String // 저장 파일명
+  path     String // 서버 내 파일 경로
+  filename String // 저장 파일명
 
-    mime_type String? // MIME 타입 (예: image/png)
-    size      Int? // 파일 크기 (bytes)
+  mime_type String? // MIME 타입 (예: image/png)
+  size      Int? // 파일 크기 (bytes)
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    @@index([target_type, target_id])
+  @@index([target_type, target_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -587,36 +589,36 @@ model Attachment {
 
 /// 감사 로그 처리 결과
 enum LogStatus {
-    SUCCESS
-    FAIL
+  SUCCESS
+  FAIL
 }
 
 /// 시스템 감사 로그 (누가 언제 무엇을 했는지 추적)
 model AuditLog {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    user_id Int?
-    user    User? @relation(fields: [user_id], references: [id]) // 행위 주체 (미로그인 시 null)
+  user_id Int?
+  user    User? @relation(fields: [user_id], references: [id]) // 행위 주체 (미로그인 시 null)
 
-    page   String // 액션이 발생한 페이지/모듈
-    action LogAction // 수행한 액션 유형
+  page   String // 액션이 발생한 페이지/모듈
+  action LogAction // 수행한 액션 유형
 
-    target_type String? // 대상 모델명 (예: Material)
-    target_id   Int? // 대상 레코드 ID
+  target_type String? // 대상 모델명 (예: Material)
+  target_id   Int? // 대상 레코드 ID
 
-    description String? @db.Text // 액션 설명
+  description String? @db.Text // 액션 설명
 
-    before_data Json? // 변경 전 데이터 스냅샷
-    after_data  Json? // 변경 후 데이터 스냅샷
+  before_data Json? // 변경 전 데이터 스냅샷
+  after_data  Json? // 변경 후 데이터 스냅샷
 
-    ip         String? // 클라이언트 IP
-    user_agent String? // 브라우저/클라이언트 정보
+  ip         String? // 클라이언트 IP
+  user_agent String? // 브라우저/클라이언트 정보
 
-    status LogStatus @default(SUCCESS) // 처리 결과
+  status LogStatus @default(SUCCESS) // 처리 결과
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    @@index([user_id])
+  @@index([user_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -625,72 +627,72 @@ model AuditLog {
 
 /// 일별 재고 스냅샷 (특정 날짜의 자재별·창고별 재고 수량 보관)
 model StockDailySnapshot {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    date DateTime @db.Date // 기준 날짜
+  date DateTime @db.Date // 기준 날짜
 
-    material_id  Int
-    warehouse_id Int
+  material_id  Int
+  warehouse_id Int
 
-    quantity Int // 해당 날짜 말 기준 재고 수량
+  quantity Int // 해당 날짜 말 기준 재고 수량
 
-    material  Material  @relation(fields: [material_id], references: [id])
-    warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+  material  Material  @relation(fields: [material_id], references: [id])
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
 
-    @@unique([date, material_id, warehouse_id])
+  @@unique([date, material_id, warehouse_id])
 }
 
 /// 일별 입고 통계 (자재별 일자별 입고 합계)
 model InboundDailyStat {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    date        DateTime @db.Date // 기준 날짜
-    material_id Int
+  date        DateTime @db.Date // 기준 날짜
+  material_id Int
 
-    total_qty  Int // 총 입고 수량
-    total_cost Decimal @db.Decimal(18, 2) // 총 입고 금액
+  total_qty  Int // 총 입고 수량
+  total_cost Decimal @db.Decimal(18, 2) // 총 입고 금액
 
-    material Material @relation(fields: [material_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
 
-    @@unique([date, material_id])
+  @@unique([date, material_id])
 }
 
 /// 일별 출고 통계 (자재별 일자별 출고·수익 합계)
 model OutboundDailyStat {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    date        DateTime @db.Date // 기준 날짜
-    material_id Int
+  date        DateTime @db.Date // 기준 날짜
+  material_id Int
 
-    total_qty    Int // 총 출고 수량
-    total_sales  Decimal @db.Decimal(18, 2) // 총 판매금액
-    total_cost   Decimal @db.Decimal(18, 2) // 총 원가금액
-    total_profit Decimal @db.Decimal(18, 2) // 총 이익
+  total_qty    Int // 총 출고 수량
+  total_sales  Decimal @db.Decimal(18, 2) // 총 판매금액
+  total_cost   Decimal @db.Decimal(18, 2) // 총 원가금액
+  total_profit Decimal @db.Decimal(18, 2) // 총 이익
 
-    material Material @relation(fields: [material_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
 
-    @@unique([date, material_id])
-    @@index([date])
-    @@index([material_id])
+  @@unique([date, material_id])
+  @@index([date])
+  @@index([material_id])
 }
 
 /// 일별 반품 통계 (자재별 일자별 반품·수익 합계)
 model ReturnDailyStat {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    date        DateTime @db.Date // 기준 날짜
-    material_id Int
+  date        DateTime @db.Date // 기준 날짜
+  material_id Int
 
-    total_qty    Int // 총 반품 수량
-    total_sales  Decimal @db.Decimal(18, 2) // 반품 판매금액 합계
-    total_cost   Decimal @db.Decimal(18, 2) // 반품 원가금액 합계
-    total_profit Decimal @db.Decimal(18, 2) // 반품으로 인한 이익 조정액
+  total_qty    Int // 총 반품 수량
+  total_sales  Decimal @db.Decimal(18, 2) // 반품 판매금액 합계
+  total_cost   Decimal @db.Decimal(18, 2) // 반품 원가금액 합계
+  total_profit Decimal @db.Decimal(18, 2) // 반품으로 인한 이익 조정액
 
-    material Material @relation(fields: [material_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
 
-    @@unique([date, material_id])
-    @@index([date])
-    @@index([material_id])
+  @@unique([date, material_id])
+  @@index([date])
+  @@index([material_id])
 }
 
 //////////////////////////////////////////////////////////////
@@ -699,174 +701,241 @@ model ReturnDailyStat {
 
 /// 시스템 설정 (키-값 형태의 동적 설정 관리)
 model Settings {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    key  String @db.VarChar(100) // 설정 키 (예: company_name)
-    text String @db.VarChar(255) // 설정 표시명 (UI용 레이블)
+  key  String @db.VarChar(100) // 설정 키 (예: company_name)
+  text String @db.VarChar(255) // 설정 표시명 (UI용 레이블)
 
-    value String @db.Text // 설정 값
+  value String @db.Text // 설정 값
 
-    is_active Boolean @default(true) // 활성화 여부
+  is_active Boolean @default(true) // 활성화 여부
 
-    sort Int @default(0) // 정렬 순서
+  sort Int @default(0) // 정렬 순서
 
-    created_at DateTime? @default(now())
-    updated_at DateTime? @updatedAt
+  created_at DateTime? @default(now())
+  updated_at DateTime? @updatedAt
 
-    @@index([sort])
+  @@index([sort])
 }
 
 /// 공통 카테고리 (드롭다운 등 공통 코드 관리)
 model Category {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    text  String @db.VarChar(255) // 표시명
-    value String @db.VarChar(255) // 코드값
+  text  String @db.VarChar(255) // 표시명
+  value String @db.VarChar(255) // 코드값
 
-    is_active Boolean @default(true)
+  is_active Boolean @default(true)
 
-    sort Int @default(0)
+  sort Int @default(0)
 
-    created_at DateTime? @default(now())
-    updated_at DateTime? @updatedAt
+  created_at DateTime? @default(now())
+  updated_at DateTime? @updatedAt
 
-    @@index([sort])
+  @@index([sort])
 }
 
 /// 알림 유형
 enum NotificationType {
-    INBOUND
-    OUTBOUND
-    MATERIAL
-    RETURNORDER
-    STOCK
-    PURCHASEORDER
-    SYSTEM
+  INBOUND
+  OUTBOUND
+  MATERIAL
+  RETURNORDER
+  STOCK
+  PURCHASEORDER
+  SYSTEM
 }
 
 /// 사용자 알림
 model Notification {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    user_id     Int?
-    user        User?            @relation(fields: [user_id], references: [id])
-    type        NotificationType // 알림 유형
-    title       String? // 알림 제목
-    message     String? // 알림 본문
-    action      String? // 클릭 시 이동할 경로
-    target_type String? // 연관 대상 모델명
-    target_id   Int? // 연관 대상 레코드 ID
+  user_id     Int?
+  user        User?            @relation(fields: [user_id], references: [id])
+  type        NotificationType // 알림 유형
+  title       String? // 알림 제목
+  message     String? // 알림 본문
+  action      String? // 클릭 시 이동할 경로
+  target_type String? // 연관 대상 모델명
+  target_id   Int? // 연관 대상 레코드 ID
 
-    is_read    Boolean   @default(false) // 읽음 여부
-    read_at    DateTime? // 읽은 일시
-    created_at DateTime  @default(now())
+  is_read    Boolean   @default(false) // 읽음 여부
+  read_at    DateTime? // 읽은 일시
+  created_at DateTime  @default(now())
 
-    @@index([user_id])
-    @@index([is_read])
+  @@index([user_id])
+  @@index([is_read])
 }
 
 /// 권한 항목 (기능 단위 접근 제어)
 model Permission {
-    id     Int              @id @default(autoincrement())
-    code   String           @unique // 권한 코드 (예: material.read, inbound.create)
-    name   String // 권한 표시명
-    group  String // UI 그룹 (예: 자재관리, 입고관리)
-    action String           @default("") // HTTP 메서드 또는 액션 유형
-    sort   Int              @default(0)
-    roles  RolePermission[]
+  id     Int              @id @default(autoincrement())
+  code   String           @unique // 권한 코드 (예: material.read, inbound.create)
+  name   String // 권한 표시명
+  group  String // UI 그룹 (예: 자재관리, 입고관리)
+  action String           @default("") // HTTP 메서드 또는 액션 유형
+  sort   Int              @default(0)
+  roles  RolePermission[]
 }
 
 /// 역할-권한 매핑 (다대다 중간 테이블)
 model RolePermission {
-    id            Int        @id @default(autoincrement())
-    role_id       Int
-    permission_id Int
-    role          Role       @relation(fields: [role_id], references: [id])
-    permission    Permission @relation(fields: [permission_id], references: [id])
+  id            Int        @id @default(autoincrement())
+  role_id       Int
+  permission_id Int
+  role          Role       @relation(fields: [role_id], references: [id])
+  permission    Permission @relation(fields: [permission_id], references: [id])
 
-    @@unique([role_id, permission_id]) // 동일 역할에 동일 권한 중복 불가
+  @@unique([role_id, permission_id]) // 동일 역할에 동일 권한 중복 불가
 }
 
 /// 사용자 IP 화이트리스트 (ip_restrict=true인 사용자에게 적용)
 model UserIpWhitelist {
-    id        Int     @id @default(autoincrement())
-    user_id   Int
-    ip        String // 허용 IP (IPv4 / IPv6)
-    memo      String? // 메모 (예: 회사 VPN, 재택 IP)
-    is_active Boolean @default(true) // 활성화 여부
+  id        Int     @id @default(autoincrement())
+  user_id   Int
+  ip        String // 허용 IP (IPv4 / IPv6)
+  memo      String? // 메모 (예: 회사 VPN, 재택 IP)
+  is_active Boolean @default(true) // 활성화 여부
 
-    user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
 
-    created_at DateTime @default(now())
+  created_at DateTime @default(now())
 
-    @@unique([user_id, ip]) // 동일 사용자에 동일 IP 중복 불가
-    @@index([user_id])
+  @@unique([user_id, ip]) // 동일 사용자에 동일 IP 중복 불가
+  @@index([user_id])
 }
 
 /// 반품 전표 (헤더)
 model ReturnOrder {
-    id      Int  @id @default(autoincrement())
-    user_id Int
-    user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
+  id      Int  @id @default(autoincrement())
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
 
-    return_no   String       @unique // 반품 번호 (고유, 예: RET-20240401-001)
-    status      ReturnStatus @default(REQUESTED) // 반품 진행 상태
-    totalAmount Float        @default(0) // 반품 총액
-    memo        String?      @db.Text // 메모
+  return_no   String       @unique // 반품 번호 (고유, 예: RET-20240401-001)
+  status      ReturnStatus @default(REQUESTED) // 반품 진행 상태
+  totalAmount Float        @default(0) // 반품 총액
+  memo        String?      @db.Text // 메모
 
-    created_by Int? // 등록자 ID
-    updated_by Int? // 마지막 수정자 ID
+  created_by Int? // 등록자 ID
+  updated_by Int? // 마지막 수정자 ID
 
-    created_at DateTime @default(now())
-    updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-    items ReturnOrderItem[]
+  items ReturnOrderItem[]
 
-    @@index([status]) // 상태별 목록 조회 최적화
-    @@index([created_at]) // 기간별 리포트/조회 최적화
-    @@map("return_orders")
+  @@index([status]) // 상태별 목록 조회 최적화
+  @@index([created_at]) // 기간별 리포트/조회 최적화
+  @@map("return_orders")
 }
 
 /// 반품 품목 (라인)
 model ReturnOrderItem {
-    id             Int @id @default(autoincrement())
-    returnOrder_id Int
+  id             Int @id @default(autoincrement())
+  returnOrder_id Int
 
-    material_id  Int
-    warehouse_id Int
-    location_id  Int
-    shelf_id     Int // 선반 (필수)
+  material_id  Int
+  warehouse_id Int
+  location_id  Int
+  shelf_id     Int // 선반 (필수)
 
-    quantity    Int
-    sale_price  Decimal @db.Decimal(15, 2) // 원래 판매 단가
-    sale_amount Decimal @db.Decimal(18, 2) // 반품 판매금액
-    cost_price  Decimal @db.Decimal(15, 2) // 원가 단가
-    cost_amount Decimal @db.Decimal(18, 2) // 반품 원가금액
-    profit      Decimal @db.Decimal(18, 2) // 반품 이익 조정액
+  quantity    Int
+  sale_price  Decimal @db.Decimal(15, 2) // 원래 판매 단가
+  sale_amount Decimal @db.Decimal(18, 2) // 반품 판매금액
+  cost_price  Decimal @db.Decimal(15, 2) // 원가 단가
+  cost_amount Decimal @db.Decimal(18, 2) // 반품 원가금액
+  profit      Decimal @db.Decimal(18, 2) // 반품 이익 조정액
 
-    reasonType  String @map("reason_type") // 반품 사유 유형 (예: DEFECT, WRONG_ITEM)
-    stockStatus String @default("READY") @map("stock_status") // 재고 반영 상태 (READY: 대기, DONE: 완료)
+  reasonType  String @map("reason_type") // 반품 사유 유형 (예: DEFECT, WRONG_ITEM)
+  stockStatus String @default("READY") @map("stock_status") // 재고 반영 상태 (READY: 대기, DONE: 완료)
 
-    material    Material    @relation(fields: [material_id], references: [id])
-    location    Location    @relation(fields: [location_id], references: [id])
-    warehouse   Warehouse   @relation(fields: [warehouse_id], references: [id])
-    shelf       Shelf       @relation(fields: [shelf_id], references: [id])
-    returnOrder ReturnOrder @relation(fields: [returnOrder_id], references: [id], onDelete: Cascade)
+  material    Material    @relation(fields: [material_id], references: [id])
+  location    Location    @relation(fields: [location_id], references: [id])
+  warehouse   Warehouse   @relation(fields: [warehouse_id], references: [id])
+  shelf       Shelf       @relation(fields: [shelf_id], references: [id])
+  returnOrder ReturnOrder @relation(fields: [returnOrder_id], references: [id], onDelete: Cascade)
 
-    @@index([returnOrder_id]) // 마스터-디테일 조인 속도 향상
-    @@index([material_id]) // 특정 자재의 반품 이력 추적 최적화
-    @@index([warehouse_id, location_id]) // 창고/위치별 반품 재고 현황 조회 최적화
-    @@index([stockStatus]) // 재고 반영 처리 대상 필터링 최적화
-    @@map("return_order_items")
+  @@index([returnOrder_id]) // 마스터-디테일 조인 속도 향상
+  @@index([material_id]) // 특정 자재의 반품 이력 추적 최적화
+  @@index([warehouse_id, location_id]) // 창고/위치별 반품 재고 현황 조회 최적화
+  @@index([stockStatus]) // 재고 반영 처리 대상 필터링 최적화
+  @@map("return_order_items")
 }
 
 /// 반품 진행 상태
 /// REQUESTED: 반품 요청, INSPECTING: 검수 중, COMPLETED: 완료, REJECTED: 반려
 enum ReturnStatus {
-    REQUESTED
-    INSPECTING
-    COMPLETED
-    REJECTED
+  REQUESTED
+  INSPECTING
+  COMPLETED
+  REJECTED
+}
+
+//////////////////////////////////////////////////////////////
+// 채팅
+//////////////////////////////////////////////////////////////
+
+/// 채팅방 유형
+/// PUBLIC: 전체/공지방 (모든 직원 공용), DM: 1:1 개인 메시지
+enum ChatRoomType {
+  PUBLIC
+  DM
+}
+
+/// 채팅방 (헤더)
+model ChatRoom {
+  id Int @id @default(autoincrement())
+
+  type ChatRoomType // PUBLIC / DM
+  name String? // 방 이름 (PUBLIC 용, DM은 null)
+
+  dm_key String? @unique @db.VarChar(50) // DM 전용: "min(a,b)_max(a,b)" 형태로 쌍 중복 방지
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  members  ChatRoomMember[]
+  messages ChatMessage[]
+
+  @@index([type])
+}
+
+/// 채팅방 참가자 (방 ↔ 사용자)
+model ChatRoomMember {
+  id      Int @id @default(autoincrement())
+  room_id Int
+  user_id Int
+
+  last_read_at DateTime? // 마지막 읽은 시각 (미읽음 카운트 계산용)
+  joined_at    DateTime  @default(now())
+
+  room ChatRoom @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [user_id], references: [id])
+
+  @@unique([room_id, user_id])
+  @@index([user_id])
+}
+
+/// 채팅 메시지
+model ChatMessage {
+  id      Int @id @default(autoincrement())
+  room_id Int
+
+  sender_id Int
+  content   String @db.Text
+
+  created_at DateTime @default(now())
+
+  // Soft delete
+  is_deleted Boolean   @default(false) // 삭제 여부
+  deleted_at DateTime? // 삭제 시각
+  deleted_by Int? // 삭제한 사용자 ID (본인 또는 관리자)
+
+  room   ChatRoom @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  sender User     @relation(fields: [sender_id], references: [id])
+
+  @@index([room_id, created_at])
+  @@index([sender_id])
 }
 
 // 컬럼추가
