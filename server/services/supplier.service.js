@@ -1,6 +1,23 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
+/** 이력으로 추적하는 Supplier 필드 (type / 금액) */
+const TRACK_FIELDS = ["type", "receivable", "payable"];
+
+/** 정규화 (Decimal/enum 비교를 위해 문자열·숫자로 변환) */
+function pickTracked(obj) {
+  return {
+    type: String(obj?.type ?? "INBOUND"),
+    receivable: Number(obj?.receivable ?? 0),
+    payable: Number(obj?.payable ?? 0),
+  };
+}
+
+/** type 또는 금액이 변경되었는지 확인 */
+function trackedDiffer(before, after) {
+  return TRACK_FIELDS.some((k) => before[k] !== after[k]);
+}
+
 export default {
   /** 공급업체 전체 리스트 */
   async getAllList(data) {
@@ -98,15 +115,16 @@ export default {
   /**
    * 일괄 저장
    * @param {*} data
+   * @param {{id: number}} [user]
    */
-  async batchSave(data = []) {
+  async batchSave(data = [], user) {
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
     }
 
     const results = await Promise.all(
       data.map((row, idx) =>
-        this.save(row).catch(() => {
+        this.save(row, user).catch(() => {
           throw new AppError(
             `${idx + 1}번째 데이터 저장 실패`,
             400,
@@ -120,20 +138,95 @@ export default {
   },
 
   /**
-   * 공급업체 생성/수정 (id 없거나 0 → create, 아니면 update)
-   * @param {Prisma.TransactionClient} [tx=prisma]
+   * 공급업체/거래처 생성·수정 트랜잭션
+   * - id 없거나 0 → create / 아니면 update
+   * - type/receivable/payable 중 하나라도 변경되면 SupplierHistory 스냅샷 1행 기록
+   * - CREATE 시에는 항상 스냅샷 기록
+   * @param {Object} data
+   * @param {{id: number}} [user]
    */
-  async save(data, tx = prisma) {
-    if (!data.id || data.id === 0) {
-      const createData = { ...data };
-      delete createData.id;
+  async save(data, user) {
+    return prisma.$transaction(async (tx) => {
+      const isCreate = !data.id || data.id === 0;
+      let row;
+      let action;
 
-      return tx.supplier.create({ data: createData });
+      if (isCreate) {
+        const createData = { ...data };
+        delete createData.id;
+        row = await tx.supplier.create({ data: createData });
+        action = "CREATE";
+      } else {
+        const before = await tx.supplier.findUnique({ where: { id: data.id } });
+        if (!before) {
+          throw new AppError("존재하지 않는 거래처입니다.", 404, "NOT_FOUND");
+        }
+
+        row = await tx.supplier.update({
+          where: { id: data.id },
+          data,
+        });
+
+        action = trackedDiffer(pickTracked(before), pickTracked(row))
+          ? "UPDATE"
+          : null;
+      }
+
+      if (action) {
+        await tx.supplierHistory.create({
+          data: {
+            supplier_id: row.id,
+            type: row.type,
+            receivable: row.receivable,
+            payable: row.payable,
+            action,
+            updated_by: user?.id ?? null,
+          },
+        });
+      }
+
+      return row;
+    });
+  },
+
+  /**
+   * 거래처 변경 이력 리스트 (역방향 페이지네이션, 수정자 이름 포함)
+   * @param {{supplier_id: number, beforeId?: number, limit?: number}} data
+   */
+  async getHistory(data) {
+    const supplierId = Number(data?.supplier_id);
+    if (!supplierId) {
+      throw new AppError("supplier_id 가 필요합니다.", 400, "INVALID_ID");
     }
 
-    return tx.supplier.update({
-      where: { id: data.id },
-      data,
+    const limit = Math.min(Math.max(Number(data?.limit) || 50, 1), 200);
+    const beforeId = data?.beforeId ? Number(data.beforeId) : undefined;
+
+    const rows = await prisma.supplierHistory.findMany({
+      where: {
+        supplier_id: supplierId,
+        ...(beforeId ? { id: { lt: beforeId } } : {}),
+      },
+      orderBy: { id: "desc" },
+      take: limit,
     });
+
+    const userIds = [
+      ...new Set(rows.map((r) => r.updated_by).filter((v) => v != null)),
+    ];
+
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, username: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return rows.map((r) => ({
+      ...r,
+      updated_by_name: userMap.get(r.updated_by)?.name ?? "",
+      updated_by_username: userMap.get(r.updated_by)?.username ?? "",
+    }));
   },
 };

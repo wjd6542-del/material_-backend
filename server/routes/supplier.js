@@ -5,6 +5,7 @@ import {
   saveSchema,
   batchSaveSchema,
   batchDeleteSchema,
+  historyListSchema,
 } from "../validators/supplier.schema.js";
 
 /**
@@ -37,18 +38,24 @@ export default async function supplierRoutes(app) {
   /** 공급업체 생성/수정 @route POST /api/supplier/save */
   app.post("/save", async (req) => {
     const body = validate(saveSchema, req.body);
-    return supplierService.save(body);
+    return supplierService.save(body, req.user);
   });
 
   /** 공급업체 일괄 저장 @route POST /api/supplier/batchSave */
   app.post("/batchSave", async (req) => {
     const body = validate(batchSaveSchema, req.body);
-    return supplierService.batchSave(body);
+    return supplierService.batchSave(body, req.user);
   });
 
   /** 공급업체 일괄 삭제 @route POST /api/supplier/batchDelete */
   app.post("/batchDelete", async (req) => {
     const body = validate(batchDeleteSchema, req.body);
     return supplierService.batchDelete(body);
+  });
+
+  /** 거래처 변경 이력 리스트 @route POST /api/supplier/history */
+  app.post("/history", async (req) => {
+    const body = validate(historyListSchema, req.body);
+    return supplierService.getHistory(body);
   });
 }

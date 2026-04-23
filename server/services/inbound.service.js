@@ -2,6 +2,55 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
+/**
+ * InboundItem 배열을 supplier_id 별 amount 합계 Map 으로 집계
+ * - supplier_id 가 없는 항목은 제외
+ * - 각 item 의 amount 를 우선 사용, 없으면 quantity * unit_price 로 재계산
+ * @param {Array} items
+ * @returns {Map<number, number>}
+ */
+function aggregateSupplierAmounts(items) {
+  const map = new Map();
+  for (const item of items) {
+    if (!item?.supplier_id) continue;
+    const amount = Number(
+      item.amount ?? Number(item.quantity ?? 0) * Number(item.unit_price ?? 0),
+    );
+    map.set(item.supplier_id, (map.get(item.supplier_id) || 0) + amount);
+  }
+  return map;
+}
+
+/**
+ * 거래처 payable(미지급금) 증감 반영 + SupplierHistory 스냅샷 기록 (트랜잭션 내)
+ * @param {Prisma.TransactionClient} tx
+ * @param {Map<number, number>} deltaMap supplier_id → 증감액 (양수: 증가, 음수: 감소)
+ * @param {number|null} userId 처리자 ID
+ * @param {string} inboundNo 참조 입고번호 (이력 reason 용)
+ */
+async function applySupplierPayableDelta(tx, deltaMap, userId, inboundNo) {
+  for (const [supplierId, delta] of deltaMap) {
+    if (!delta) continue;
+
+    const updated = await tx.supplier.update({
+      where: { id: supplierId },
+      data: { payable: { increment: delta } },
+    });
+
+    await tx.supplierHistory.create({
+      data: {
+        supplier_id: supplierId,
+        type: updated.type,
+        receivable: updated.receivable,
+        payable: updated.payable,
+        action: "UPDATE",
+        updated_by: userId,
+        reason: `입고 ${inboundNo} 반영 (${delta > 0 ? "+" : ""}${delta})`,
+      },
+    });
+  }
+}
+
 export default {
   /**
    * 입고 전표 전체 리스트 (user, items 포함)
@@ -220,14 +269,14 @@ export default {
    * 입고 전표 일괄 삭제 (각 건별 deleteById 실행, 실패 건 인덱스 포함 에러)
    * @param {Array<{id:number}>} data
    */
-  async batchDelete(data = []) {
+  async batchDelete(data = [], user) {
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
     }
 
     const results = await Promise.all(
       data.map((row, idx) =>
-        this.deleteById(row.id).catch(() => {
+        this.deleteById(row.id, user).catch(() => {
           throw new AppError(
             `${idx + 1} 번째 데이터 삭제 실패`,
             400,
@@ -245,7 +294,7 @@ export default {
    * - Inbound cascade 로 InboundItem 정리
    * @param {number} id
    */
-  async deleteById(id) {
+  async deleteById(id, user) {
     return prisma.$transaction(async (tx) => {
       const inbound = await tx.inbound.findUnique({
         where: { id },
@@ -266,6 +315,19 @@ export default {
           inbound.user_id,
         );
       }
+
+      // 거래처 미지급금 롤백: 이 입고의 모든 supplier 금액을 음수 delta 로 적용
+      const rollbackAmounts = aggregateSupplierAmounts(inbound.items);
+      const deltaMap = new Map();
+      for (const [sid, amount] of rollbackAmounts) {
+        if (amount !== 0) deltaMap.set(sid, -amount);
+      }
+      await applySupplierPayableDelta(
+        tx,
+        deltaMap,
+        user?.id ?? inbound.user_id,
+        `${inbound.inbound_no}(삭제)`,
+      );
 
       await tx.inbound.delete({
         where: { id },
@@ -428,6 +490,30 @@ export default {
           where: { id: item.id },
         });
       }
+
+      // 거래처 미지급금 반영:
+      // - 이전 items 합계 vs 신규 items 합계의 차이를 supplier 별로 계산
+      // - 0 이 아닌 delta 에 대해서만 supplier.payable 증감 + SupplierHistory 기록
+      const oldAmounts = aggregateSupplierAmounts(oldItems);
+      const newAmounts = aggregateSupplierAmounts(data.items);
+      const supplierIds = new Set([
+        ...oldAmounts.keys(),
+        ...newAmounts.keys(),
+      ]);
+
+      const deltaMap = new Map();
+      for (const sid of supplierIds) {
+        const delta =
+          (newAmounts.get(sid) ?? 0) - (oldAmounts.get(sid) ?? 0);
+        if (delta !== 0) deltaMap.set(sid, delta);
+      }
+
+      await applySupplierPayableDelta(
+        tx,
+        deltaMap,
+        user.id,
+        inbound.inbound_no,
+      );
 
       return inbound;
     });

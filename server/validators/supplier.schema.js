@@ -13,13 +13,25 @@ export const saveSchema = z.object({
       return val < 0 ? 0 : val;
     }),
   name: z.string().trim(),
+  type: z.enum(["INBOUND", "OUTBOUND"]).optional(),
+  registration_no: z.string().trim().max(20).nullable().optional(),
   phone: z.string().trim(),
+  mobile: z.string().trim().max(50).nullable().optional(),
+  fax: z.string().trim().max(50).nullable().optional(),
   email: z.string().trim(),
   memo: z.string().trim(),
   zipcode: z.string().trim().max(500).nullable().optional(),
   address: z.string().trim().max(500).nullable().optional(),
   address_detail: z.string().trim().max(500).nullable().optional(),
+  receivable: z.coerce.number().min(0).optional(),
+  payable: z.coerce.number().min(0).optional(),
   sort: z.coerce.number().optional(),
+});
+
+export const historyListSchema = z.object({
+  supplier_id: z.coerce.number().int().positive(),
+  beforeId: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
 export const batchSaveSchema = z
