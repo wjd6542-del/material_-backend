@@ -3,9 +3,9 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 
 /**
- * InboundItem 배열을 supplier_id 별 amount 합계 Map 으로 집계
+ * InboundItem 배열을 supplier_id 별 supply_amount 합계 Map 으로 집계
  * - supplier_id 가 없는 항목은 제외
- * - 각 item 의 amount 를 우선 사용, 없으면 quantity * unit_price 로 재계산
+ * - 각 item 의 supply_amount 를 우선 사용, 없으면 quantity * price 로 재계산
  * @param {Array} items
  * @returns {Map<number, number>}
  */
@@ -14,7 +14,8 @@ function aggregateSupplierAmounts(items) {
   for (const item of items) {
     if (!item?.supplier_id) continue;
     const amount = Number(
-      item.amount ?? Number(item.quantity ?? 0) * Number(item.unit_price ?? 0),
+      item.supply_amount ??
+        Number(item.quantity ?? 0) * Number(item.price ?? 0),
     );
     map.set(item.supplier_id, (map.get(item.supplier_id) || 0) + amount);
   }
@@ -89,6 +90,7 @@ export default {
       include: {
         user: true,
         items: true,
+        supplier: true,
       },
       orderBy: { created_at: "desc" },
     });
@@ -202,46 +204,63 @@ export default {
   /**
    * 재고(Stock) 증감 + StockHistory 이력 기록 헬퍼 (트랜잭션 내 호출 전용)
    * @param {Prisma.TransactionClient} tx
-   * @param {{material_id:number,warehouse_id:number,location_id:number,unit_price?:number}} item
+   * @param {{material_id:number,warehouse_id:number,location_id:number,shelf_id?:number,price?:number}} item
    * @param {number} diffQty 증감값 (음수면 OUTBOUND 타입으로 기록)
    * @param {string} refTable 참조 테이블명 (예: 'inbound', 'inbound_cancel')
    * @param {number} refId 참조 레코드 ID
    * @param {number} userId 처리자 ID
    */
   async updateStock(tx, item, diffQty, refTable, refId, userId) {
+    const uniqueKey = {
+      material_id: item.material_id,
+      warehouse_id: item.warehouse_id,
+      location_id: item.location_id,
+      shelf_id: item.shelf_id ?? null,
+    };
+
     const stock = await tx.stock.findUnique({
       where: {
-        material_id_warehouse_id_location_id: {
-          material_id: item.material_id,
-          warehouse_id: item.warehouse_id,
-          location_id: item.location_id,
-        },
+        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
       },
     });
 
     const beforeQty = stock?.quantity ?? 0;
     const afterQty = beforeQty + diffQty;
+    const oldAvgCost = Number(stock?.avg_cost ?? 0);
+    const unitCost = Number(item.price ?? 0);
 
-    const unitCost = item.unit_price ?? 0;
+    // 이동평균 단가 계산
+    // - 입고(diffQty>0): (기존 수량·단가 + 입고 수량·단가) / 전체 수량
+    // - 출고/롤백(diffQty<0): 기존 avg_cost 유지
+    // - 재고 0 소진 시 avg_cost=0 초기화
+    let newAvgCost = oldAvgCost;
+    if (afterQty <= 0) {
+      newAvgCost = 0;
+    } else if (diffQty > 0) {
+      newAvgCost = (beforeQty * oldAvgCost + diffQty * unitCost) / afterQty;
+    }
+    const stockValue = afterQty * newAvgCost;
+
     const amount = unitCost * diffQty;
 
     const stockRow = await tx.stock.upsert({
       where: {
-        material_id_warehouse_id_location_id: {
-          material_id: item.material_id,
-          warehouse_id: item.warehouse_id,
-          location_id: item.location_id,
-        },
+        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
       },
       update: {
         quantity: afterQty,
+        avg_cost: newAvgCost,
+        stock_value: stockValue,
         updated_by: userId,
       },
       create: {
         material_id: item.material_id,
         warehouse_id: item.warehouse_id,
         location_id: item.location_id,
+        shelf_id: item.shelf_id ?? null,
         quantity: afterQty,
+        avg_cost: newAvgCost,
+        stock_value: stockValue,
         updated_by: userId,
       },
     });
@@ -251,6 +270,7 @@ export default {
         material_id: item.material_id,
         warehouse_id: item.warehouse_id,
         location_id: item.location_id,
+        shelf_id: item.shelf_id ?? null,
         stock_id: stockRow.id,
         type: diffQty > 0 ? "INBOUND" : "OUTBOUND",
         quantity: diffQty,
@@ -351,6 +371,15 @@ export default {
     return prisma.$transaction(async (tx) => {
       let inbound;
 
+      const vatApplied = data.vat_applied !== false;
+
+      const headerData = {
+        supplier_id: data.supplier_id ?? null,
+        purchase_date: data.purchase_date ?? null,
+        vat_applied: vatApplied,
+        is_unpaid: data.is_unpaid !== false,
+      };
+
       if (!data.id) {
         inbound = await tx.inbound.create({
           data: {
@@ -359,6 +388,7 @@ export default {
             memo: data.memo,
             created_by: user.id,
             updated_by: user.id,
+            ...headerData,
           },
         });
 
@@ -382,6 +412,7 @@ export default {
             user_id: user.id,
             memo: data.memo,
             updated_by: user.id,
+            ...headerData,
           },
         });
 
@@ -431,8 +462,9 @@ export default {
               location_id: item.location_id,
               shelf_id: item.shelf_id,
               quantity: item.quantity,
-              unit_price: item.unit_price,
-              amount: item.quantity * item.unit_price,
+              price: item.price,
+              supply_amount: item.quantity * item.price,
+              vat: vatApplied ? (item.vat ?? 0) : 0,
             },
           });
 
@@ -456,8 +488,9 @@ export default {
               location_id: item.location_id,
               shelf_id: item.shelf_id,
               quantity: item.quantity,
-              unit_price: item.unit_price,
-              amount: item.quantity * item.unit_price,
+              price: item.price,
+              supply_amount: item.quantity * item.price,
+              vat: vatApplied ? (item.vat ?? 0) : 0,
             },
           });
 
@@ -496,15 +529,11 @@ export default {
       // - 0 이 아닌 delta 에 대해서만 supplier.payable 증감 + SupplierHistory 기록
       const oldAmounts = aggregateSupplierAmounts(oldItems);
       const newAmounts = aggregateSupplierAmounts(data.items);
-      const supplierIds = new Set([
-        ...oldAmounts.keys(),
-        ...newAmounts.keys(),
-      ]);
+      const supplierIds = new Set([...oldAmounts.keys(), ...newAmounts.keys()]);
 
       const deltaMap = new Map();
       for (const sid of supplierIds) {
-        const delta =
-          (newAmounts.get(sid) ?? 0) - (oldAmounts.get(sid) ?? 0);
+        const delta = (newAmounts.get(sid) ?? 0) - (oldAmounts.get(sid) ?? 0);
         if (delta !== 0) deltaMap.set(sid, delta);
       }
 

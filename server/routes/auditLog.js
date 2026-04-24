@@ -7,13 +7,13 @@ import { permission } from "../middleware/permission.js";
  */
 export default async function auditLogRoutes(app) {
   /**
-   * 감사 로그 리스트 (사용자/모델/기간 필터, 권한: dashboard.view)
+   * 감사 로그 리스트 (사용자/모델/기간 필터, 권한: logs.view)
    * @route POST /api/auditLog/list
    */
   app.post(
     "/list",
     {
-      preHandler: permission("dashboard.view"),
+      preHandler: permission("logs.view"),
     },
     async (req) => {
       return auditLogService.getList(req.body);

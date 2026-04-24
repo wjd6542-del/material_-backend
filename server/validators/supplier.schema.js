@@ -19,6 +19,7 @@ export const saveSchema = z.object({
   mobile: z.string().trim().max(50).nullable().optional(),
   fax: z.string().trim().max(50).nullable().optional(),
   email: z.string().trim(),
+  account_no: z.string().trim().max(50).nullable().optional(),
   memo: z.string().trim(),
   zipcode: z.string().trim().max(500).nullable().optional(),
   address: z.string().trim().max(500).nullable().optional(),

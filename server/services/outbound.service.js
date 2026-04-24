@@ -267,10 +267,11 @@ export default {
   async updateStock(tx, item, diffQty, refTable, refId, userId) {
     const stock = await tx.stock.findUnique({
       where: {
-        material_id_warehouse_id_location_id: {
+        material_id_warehouse_id_location_id_shelf_id: {
           material_id: item.material_id,
           warehouse_id: item.warehouse_id,
           location_id: item.location_id,
+          shelf_id: item.shelf_id ?? null,
         },
       },
     });
@@ -286,13 +287,18 @@ export default {
       throw new AppError("재고가 부족합니다.");
     }
 
-    const unitCost = stock.avg_cost ?? 0;
+    const unitCost = Number(stock.avg_cost ?? 0);
     const amount = unitCost * Math.abs(diffQty);
+
+    // 출고 시 avg_cost 는 유지, stock_value 는 새 수량으로 재계산
+    // (재고 0 소진 시 stock_value 도 0)
+    const newStockValue = afterQty <= 0 ? 0 : afterQty * unitCost;
 
     const stockRow = await tx.stock.update({
       where: { id: stock.id },
       data: {
         quantity: afterQty,
+        stock_value: newStockValue,
         updated_by: userId,
       },
     });
@@ -302,6 +308,7 @@ export default {
         material_id: item.material_id,
         warehouse_id: item.warehouse_id,
         location_id: item.location_id,
+        shelf_id: item.shelf_id ?? null,
         stock_id: stockRow.id,
         type: diffQty < 0 ? "OUTBOUND" : "INBOUND",
         quantity: diffQty,

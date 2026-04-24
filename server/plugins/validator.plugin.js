@@ -16,8 +16,14 @@ export function validate(schema, data) {
       code: err.code,
     }));
 
+    const first = result.error.issues[0];
+    const firstPath = first.path.join(".");
+    const displayMessage = firstPath
+      ? `[${firstPath}] ${first.message}`
+      : first.message;
+
     throw new AppError(
-      result.error.issues[0].message,
+      displayMessage,
       400,
       "VALIDATION_ERROR",
       issues, // 🔥 여기 중요

@@ -196,7 +196,7 @@ class StatService {
       by: ["material_id"],
       _sum: {
         quantity: true,
-        amount: true,
+        supply_amount: true,
       },
       where: {
         inbound: {
@@ -224,7 +224,7 @@ class StatService {
           date: targetDate,
           material_id: r.material_id,
           total_qty: Number(r._sum.quantity ?? 0),
-          total_cost: Number(r._sum.amount ?? 0),
+          total_cost: Number(r._sum.supply_amount ?? 0),
         })),
       });
     });

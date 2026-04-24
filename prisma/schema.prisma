@@ -318,6 +318,7 @@ model Supplier {
     mobile          String?      @db.VarChar(50) // 모바일
     fax             String?      @db.VarChar(50) // 팩스
     email           String? // 이메일
+    account_no      String?      @db.VarChar(50) // 계좌번호
     memo            String? // 메모
     zipcode         String? // 우편번호
     address         String? // 기본주소
@@ -330,6 +331,7 @@ model Supplier {
 
     created_at DateTime @default(now())
 
+    inbounds             Inbound[] // 이 업체로부터의 구매 전표
     inbound_items        InboundItem[] // 이 업체를 통해 입고된 품목
     outbound_items       OutboundItem[] // 이 업체로 출고된 품목
     purchase_orders      PurchaseOrder[] // 이 업체로 발주한 전표
@@ -531,14 +533,19 @@ model StockHistory {
 }
 
 //////////////////////////////////////////////////////////////
-// 입고
+// 구매
 //////////////////////////////////////////////////////////////
 
-/// 입고 전표 (헤더)
+/// 구매 전표 (헤더)
 model Inbound {
     id Int @id @default(autoincrement())
 
-    inbound_no String @unique // 입고 번호 (고유, 예: IN-20240401-001)
+    inbound_no String @unique // 구매 번호 (고유, 예: IN-20240401-001)
+
+    supplier_id   Int? // 거래처 (선택)
+    purchase_date DateTime? // 구매일자
+    vat_applied   Boolean   @default(true) // 부가세 적용 여부
+    is_unpaid     Boolean   @default(true) // 미수금 여부 (true: 미지급 상태, false: 지급 완료)
 
     user_id Int
     user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
@@ -551,10 +558,13 @@ model Inbound {
     created_at DateTime @default(now())
     updated_at DateTime @updatedAt
 
-    items InboundItem[] // 입고 품목 목록
+    supplier Supplier?     @relation(fields: [supplier_id], references: [id])
+    items    InboundItem[] // 구매 품목 목록
+
+    @@index([supplier_id])
 }
 
-/// 입고 품목 (라인)
+/// 구매 품목 (라인)
 model InboundItem {
     id Int @id @default(autoincrement())
 
@@ -567,8 +577,9 @@ model InboundItem {
 
     quantity Int // 입고 수량
 
-    unit_price Decimal @db.Decimal(15, 2) // 단가
-    amount     Decimal @db.Decimal(18, 2) // 금액 (수량 × 단가)
+    price         Decimal @db.Decimal(15, 2) // 단가
+    supply_amount Decimal @db.Decimal(18, 2) // 공급가액 (수량 × 단가)
+    vat           Decimal @default(0) @db.Decimal(18, 2) // 부가세 (vat_applied=true 일 때만 적용)
 
     inbound   Inbound   @relation(fields: [inbound_id], references: [id], onDelete: Cascade)
     material  Material  @relation(fields: [material_id], references: [id])

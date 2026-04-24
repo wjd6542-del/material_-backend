@@ -582,13 +582,14 @@ export default {
       const fromWarehouseId = fromLocation.warehouse_id;
       const toWarehouseId = toLocation.warehouse_id;
 
-      // 🔥 1. 출발 재고 조회
+      // 🔥 1. 출발 재고 조회 (shelf 미지정 재고 기준)
       const fromStock = await tx.stock.findUnique({
         where: {
-          material_id_warehouse_id_location_id: {
+          material_id_warehouse_id_location_id_shelf_id: {
             material_id,
             warehouse_id: fromWarehouseId,
             location_id: from_location_id,
+            shelf_id: null,
           },
         },
         include: {
@@ -606,23 +607,29 @@ export default {
       }
 
       const fromBefore = fromStock.quantity;
+      const fromAfter = fromBefore - quantity;
+      const fromAvgCost = Number(fromStock.avg_cost ?? 0);
+      const transferAmount = fromAvgCost * quantity;
+      const fromShelfId = fromStock.shelf_id ?? null;
 
-      // 🔥 2. 출발지 차감
+      // 🔥 2. 출발지 차감 (stock_value 재계산, avg_cost 유지)
       await tx.stock.update({
         where: { id: fromStock.id },
         data: {
-          quantity: { decrement: quantity },
+          quantity: fromAfter,
+          stock_value: fromAfter <= 0 ? 0 : fromAfter * fromAvgCost,
           updated_by: user.id,
         },
       });
 
-      // 🔥 3. 도착 재고 조회
+      // 🔥 3. 도착 재고 조회 (출발 shelf_id 그대로 보존)
       const toStock = await tx.stock.findUnique({
         where: {
-          material_id_warehouse_id_location_id: {
+          material_id_warehouse_id_location_id_shelf_id: {
             material_id,
             warehouse_id: toWarehouseId,
             location_id: to_location_id,
+            shelf_id: fromShelfId,
           },
         },
         include: {
@@ -638,10 +645,20 @@ export default {
         toBefore = toStock.quantity;
         toStockId = toStock.id;
 
+        // 이동평균 병합 (도착지에 기존 재고가 있으면 단가가 다를 수 있으므로 재계산)
+        const toOldAvg = Number(toStock.avg_cost ?? 0);
+        const toAfter = toBefore + quantity;
+        const mergedAvg =
+          toAfter > 0
+            ? (toBefore * toOldAvg + quantity * fromAvgCost) / toAfter
+            : 0;
+
         await tx.stock.update({
           where: { id: toStock.id },
           data: {
-            quantity: { increment: quantity },
+            quantity: toAfter,
+            avg_cost: mergedAvg,
+            stock_value: toAfter * mergedAvg,
             updated_by: user.id,
           },
         });
@@ -651,7 +668,10 @@ export default {
             material_id,
             warehouse_id: toWarehouseId,
             location_id: to_location_id,
+            shelf_id: fromShelfId,
             quantity,
+            avg_cost: fromAvgCost,
+            stock_value: fromAvgCost * quantity,
             updated_by: user.id,
           },
         });
@@ -665,11 +685,14 @@ export default {
           material_id,
           warehouse_id: fromWarehouseId,
           location_id: from_location_id,
+          shelf_id: fromShelfId,
           stock_id: fromStock.id,
           type: "TRANSFER_OUT",
-          quantity,
+          quantity: -quantity,
           before_qty: fromBefore,
-          after_qty: fromBefore - quantity,
+          after_qty: fromAfter,
+          unit_cost: fromAvgCost,
+          amount: transferAmount,
           created_by: user.id,
         },
       });
@@ -680,11 +703,14 @@ export default {
           material_id,
           warehouse_id: toWarehouseId,
           location_id: to_location_id,
+          shelf_id: fromShelfId,
           stock_id: toStockId,
           type: "TRANSFER_IN",
           quantity,
           before_qty: toBefore,
           after_qty: toBefore + quantity,
+          unit_cost: fromAvgCost,
+          amount: transferAmount,
           created_by: user.id,
         },
       });

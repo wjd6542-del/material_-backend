@@ -19,7 +19,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/list",
     {
-      preHandler: permission("purchaseOrder.view"),
+      preHandler: permission("purchaseorder.view"),
     },
     async (req) => {
       return purchaseOrderService.getList(req.body);
@@ -33,7 +33,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/detail/list",
     {
-      preHandler: permission("purchaseOrder.detail.view"),
+      preHandler: permission("purchaseorder.detail.view"),
     },
     async (req) => {
       return purchaseOrderService.detailList(req.body);
@@ -47,7 +47,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/info",
     {
-      preHandler: permission("purchaseOrder.view"),
+      preHandler: permission("purchaseorder.view"),
     },
     async (req) => {
       const params = validate(idParamSchema, req.body);
@@ -62,7 +62,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/:id",
     {
-      preHandler: permission("purchaseOrder.view"),
+      preHandler: permission("purchaseorder.view"),
     },
     async (req) => {
       const params = validate(idParamSchema, req.params);
@@ -77,7 +77,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/delete",
     {
-      preHandler: permission("purchaseOrder.delete"),
+      preHandler: permission("purchaseorder.delete"),
     },
     async (req) => {
       const params = validate(idParamSchema, req.body);
@@ -89,11 +89,17 @@ export default async function purchaseOrderRoutes(app) {
    * 발주 전표 생성/수정
    * @route POST /api/purchaseOrder/save
    */
-  app.post("/save", async (req) => {
-    const user = req.user;
-    const body = validate(saveSchema, req.body);
-    return purchaseOrderService.save(body, user);
-  });
+  app.post(
+    "/save",
+    {
+      preHandler: permission("purchaseorder.update"),
+    },
+    async (req) => {
+      const user = req.user;
+      const body = validate(saveSchema, req.body);
+      return purchaseOrderService.save(body, user);
+    },
+  );
 
   /**
    * 발주 전표 일괄 삭제
@@ -102,7 +108,7 @@ export default async function purchaseOrderRoutes(app) {
   app.post(
     "/batchDelete",
     {
-      preHandler: permission("purchaseOrder.delete"),
+      preHandler: permission("purchaseorder.delete"),
     },
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
