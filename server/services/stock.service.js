@@ -24,8 +24,8 @@ export default {
   },
 
   /**
-   * 안전재고(Material.safety_stock) 미만인 자재 TOP N
-   * 자재별 재고를 groupBy 로 합산 후 safety_stock 과 비교
+   * 안전재고(Material.safety_stock) 미만인 품목 TOP N
+   * 품목별 재고를 groupBy 로 합산 후 safety_stock 과 비교
    * @param {{limit?:number}} data (기본 10)
    */
   async getLowStockMaterials(data) {
@@ -79,8 +79,8 @@ export default {
    * - in_stock: 수량>0 만
    * - material_id / warehouse_id / location_id
    * - startDate/endDate (updated_at)
-   * - scan_code: 자재 코드·이름 부분 매칭 → 매칭된 자재들의 재고만 반환
-   * 자재·창고·위치 정보를 조인하고 QR 코드를 생성해 함께 반환
+   * - scan_code: 품목 코드·이름 부분 매칭 → 매칭된 품목들의 재고만 반환
+   * 품목·창고·위치 정보를 조인하고 QR 코드를 생성해 함께 반환
    */
   async getList(data) {
     const where = {};
@@ -92,7 +92,7 @@ export default {
       };
     }
 
-    // 자재 검색
+    // 품목 검색
     if (data?.material_id) {
       where.material_id = data.material_id;
     }
@@ -185,12 +185,12 @@ export default {
 
   /**
    * StockHistory(재고 변동이력) 리스트 조회
-   * (material/warehouse/location/type/검색어/기간 필터 + 자재·창고·위치 조인)
+   * (material/warehouse/location/type/검색어/기간 필터 + 품목·창고·위치 조인)
    */
   async getDetailList(data) {
     const where = {};
 
-    // 자재 검색
+    // 품목 검색
     if (data.material_id) {
       where.material_id = data.material_id;
     }
@@ -211,7 +211,7 @@ export default {
     }
 
     // 검색 기준 적용
-    // 자재명, 자재코드 검색
+    // 품목명, 품목코드 검색
     if (data?.searchText) {
       const materials = await prisma.material.findMany({
         where: {
@@ -272,8 +272,8 @@ export default {
   },
 
   /**
-   * 창고별 자재 재고 집계 (도면 표시용 points/rotation 포함)
-   * 1) Warehouse 전체 조회 → 2) Stock groupBy(warehouse,material) → 3) 자재+대표이미지 조회
+   * 창고별 품목 재고 집계 (도면 표시용 points/rotation 포함)
+   * 1) Warehouse 전체 조회 → 2) Stock groupBy(warehouse,material) → 3) 품목+대표이미지 조회
    * → 4) 창고 id 로 stocks 배열 매핑 → 반환
    */
   async warehousStock() {
@@ -291,7 +291,7 @@ export default {
       },
     });
 
-    // 3️⃣ 자재 정보 조회
+    // 3️⃣ 품목 정보 조회
 
     const materials = await prisma.material.findMany({
       where: {
@@ -337,7 +337,7 @@ export default {
         // 수량
         qty: v._sum.quantity,
 
-        // 자재 이미지
+        // 품목 이미지
         image: image || null,
         image_url: image?.file_url || null,
       });
@@ -355,7 +355,7 @@ export default {
   },
 
   /**
-   * 위치(Location) 기준 자재 재고 집계
+   * 위치(Location) 기준 품목 재고 집계
    * (warehouse_id 로 선택 필터링, 대표 이미지 포함)
    */
   async locationStock(data) {
@@ -388,7 +388,7 @@ export default {
 
     const materialIds = stocks.map((v) => v.material_id);
 
-    // 3️⃣ 자재 + 이미지 조회 (🔥 여기 수정)
+    // 3️⃣ 품목 + 이미지 조회 (🔥 여기 수정)
     const materials = await prisma.material.findMany({
       where: {
         id: { in: materialIds },
@@ -433,7 +433,7 @@ export default {
         // 수량
         qty: v._sum.quantity,
 
-        // 자재 이미지
+        // 품목 이미지
         image: image || null,
         image_url: image?.file_url || null,
       });
@@ -454,7 +454,7 @@ export default {
   },
 
   /**
-   * 선반(Shelf) 기준 자재 재고 집계 (좌표/크기 포함)
+   * 선반(Shelf) 기준 품목 재고 집계 (좌표/크기 포함)
    * warehouse_id, location_id 로 범위 필터 가능
    */
   async shelfStock(data) {
@@ -488,7 +488,7 @@ export default {
 
     const materialIds = stocks.map((v) => v.material_id);
 
-    // 3️⃣ 자재 + 이미지 조회
+    // 3️⃣ 품목 + 이미지 조회
     const materials = await prisma.material.findMany({
       where: {
         id: { in: materialIds },
@@ -561,7 +561,7 @@ export default {
   async transfer(data, user) {
     const { material_id, from_location_id, to_location_id, quantity } = data;
 
-    if (!material_id) throw new Error("자재 없음");
+    if (!material_id) throw new Error("품목 없음");
     if (!from_location_id) throw new Error("출발 위치 없음");
     if (!to_location_id) throw new Error("도착 위치 없음");
     if (from_location_id === to_location_id) {
@@ -704,7 +704,7 @@ export default {
       });
 
       // 🔥 7. 알림
-      const materialName = fromStock.material?.name || "자재";
+      const materialName = fromStock.material?.name || "품목";
 
       await tx.notification.create({
         data: {

@@ -105,10 +105,10 @@ model User {
 }
 
 //////////////////////////////////////////////////////////////
-// 자재
+// 품목
 //////////////////////////////////////////////////////////////
 
-/// 자재 분류 카테고리
+/// 품목 분류 카테고리
 model MaterialCategory {
     id       Int    @id @default(autoincrement())
     name     String @unique // 카테고리명 (고유)
@@ -126,12 +126,12 @@ model MaterialCategory {
     @@index([path]) // 경로 검색 최적화
 }
 
-/// 자재 마스터
+/// 품목 마스터
 model Material {
     id Int @id @default(autoincrement())
 
-    code String @unique @db.VarChar(50) // 자재 코드 (고유)
-    name String @db.VarChar(200) // 자재명
+    code String @unique @db.VarChar(50) // 품목 코드 (고유)
+    name String @db.VarChar(200) // 품목명
 
     category_id Int?
     category    MaterialCategory? @relation(fields: [category_id], references: [id])
@@ -181,7 +181,7 @@ model Material {
     priceHistories       MaterialPriceHistory[]
 }
 
-/// 자재 가격 변동 이력 (등록·수정 시 6개 가격 스냅샷)
+/// 품목 가격 변동 이력 (등록·수정 시 6개 가격 스냅샷)
 /// - 한 번 저장 시 1행 (모든 가격 필드를 함께 저장)
 /// - UPDATE 액션: 6개 가격 중 하나라도 변경된 경우에만 기록
 model MaterialPriceHistory {
@@ -213,8 +213,8 @@ model MaterialPriceHistory {
     @@index([material_id, created_at])
 }
 
-/// 자재 요율 공통 설정 (싱글톤 — Business 처럼 1행 관리)
-/// 전체 자재에 공통 적용되는 기본 요율 (자재 등록 화면 프리셋용).
+/// 품목 요율 공통 설정 (싱글톤 — Business 처럼 1행 관리)
+/// 전체 품목에 공통 적용되는 기본 요율 (품목 등록 화면 프리셋용).
 /// 필드명은 Material 의 요율 컬럼과 동일하게 맞춰 프론트에서 그대로 바인딩 가능.
 /// 변경 시 MaterialRateHistory 에 스냅샷 기록
 model MaterialRate {
@@ -233,7 +233,7 @@ model MaterialRate {
     histories MaterialRateHistory[]
 }
 
-/// 자재 요율 변경 이력 (MaterialRate 변경 시 스냅샷 1행 기록)
+/// 품목 요율 변경 이력 (MaterialRate 변경 시 스냅샷 1행 기록)
 model MaterialRateHistory {
     id Int @id @default(autoincrement())
 
@@ -254,7 +254,7 @@ model MaterialRateHistory {
     @@index([rate_id, created_at])
 }
 
-/// 자재 이미지 (다중 첨부 지원)
+/// 품목 이미지 (다중 첨부 지원)
 model MaterialImage {
     id Int @id @default(autoincrement())
 
@@ -273,7 +273,7 @@ model MaterialImage {
     @@index([material_id])
 }
 
-/// 태그 마스터 (자재와 독립적으로 관리)
+/// 태그 마스터 (품목와 독립적으로 관리)
 model Tag {
     id         Int      @id @default(autoincrement())
     name       String   @unique // 태그명 (고유)
@@ -283,7 +283,7 @@ model Tag {
     materials MaterialTag[]
 }
 
-/// 자재-태그 연결 (다대다)
+/// 품목-태그 연결 (다대다)
 model MaterialTag {
     id          Int      @id @default(autoincrement())
     material_id Int
@@ -308,7 +308,7 @@ enum SupplierType {
     OUTBOUND // 판매 (고객사)
 }
 
-/// 자재 공급업체 / 거래처
+/// 품목 공급업체 / 거래처
 model Supplier {
     id              Int          @id @default(autoincrement())
     name            String // 업체명
@@ -466,7 +466,7 @@ model Shelf {
 // 재고
 //////////////////////////////////////////////////////////////
 
-/// 현재 재고 (자재 × 창고 × 위치 × 선반 단위의 실시간 수량)
+/// 현재 재고 (품목 × 창고 × 위치 × 선반 단위의 실시간 수량)
 model Stock {
     id Int @id @default(autoincrement())
 
@@ -679,7 +679,7 @@ model PurchaseOrderItem {
     id Int @id @default(autoincrement())
 
     purchase_order_id Int // 발주 기본키
-    material_id       Int // 자재 기본키
+    material_id       Int // 품목 기본키
     supplier_id       Int // 거래처 (헤더와 동일, 조회 편의용 비정규화)
 
     quantity Int // 발주 수량
@@ -703,7 +703,7 @@ model PurchaseOrderItem {
 // 파일 첨부
 //////////////////////////////////////////////////////////////
 
-/// 범용 파일 첨부 (자재·입고·출고·사용자 등 다양한 대상에 연결)
+/// 범용 파일 첨부 (품목·입고·출고·사용자 등 다양한 대상에 연결)
 model Attachment {
     id Int @id @default(autoincrement())
 
@@ -763,7 +763,7 @@ model AuditLog {
 // 통계
 //////////////////////////////////////////////////////////////
 
-/// 일별 재고 스냅샷 (특정 날짜의 자재별·창고별 재고 수량 보관)
+/// 일별 재고 스냅샷 (특정 날짜의 품목별·창고별 재고 수량 보관)
 model StockDailySnapshot {
     id Int @id @default(autoincrement())
 
@@ -780,7 +780,7 @@ model StockDailySnapshot {
     @@unique([date, material_id, warehouse_id])
 }
 
-/// 일별 입고 통계 (자재별 일자별 입고 합계)
+/// 일별 입고 통계 (품목별 일자별 입고 합계)
 model InboundDailyStat {
     id Int @id @default(autoincrement())
 
@@ -795,7 +795,7 @@ model InboundDailyStat {
     @@unique([date, material_id])
 }
 
-/// 일별 출고 통계 (자재별 일자별 출고·수익 합계)
+/// 일별 출고 통계 (품목별 일자별 출고·수익 합계)
 model OutboundDailyStat {
     id Int @id @default(autoincrement())
 
@@ -814,7 +814,7 @@ model OutboundDailyStat {
     @@index([material_id])
 }
 
-/// 일별 반품 통계 (자재별 일자별 반품·수익 합계)
+/// 일별 반품 통계 (품목별 일자별 반품·수익 합계)
 model ReturnDailyStat {
     id Int @id @default(autoincrement())
 
@@ -910,7 +910,7 @@ model Permission {
     id     Int              @id @default(autoincrement())
     code   String           @unique // 권한 코드 (예: material.read, inbound.create)
     name   String // 권한 표시명
-    group  String // UI 그룹 (예: 자재관리, 입고관리)
+    group  String // UI 그룹 (예: 품목관리, 입고관리)
     action String           @default("") // HTTP 메서드 또는 액션 유형
     sort   Int              @default(0)
     roles  RolePermission[]
@@ -994,7 +994,7 @@ model ReturnOrderItem {
     returnOrder ReturnOrder @relation(fields: [returnOrder_id], references: [id], onDelete: Cascade)
 
     @@index([returnOrder_id]) // 마스터-디테일 조인 속도 향상
-    @@index([material_id]) // 특정 자재의 반품 이력 추적 최적화
+    @@index([material_id]) // 특정 품목의 반품 이력 추적 최적화
     @@index([warehouse_id, location_id]) // 창고/위치별 반품 재고 현황 조회 최적화
     @@index([stockStatus]) // 재고 반영 처리 대상 필터링 최적화
     @@map("return_order_items")

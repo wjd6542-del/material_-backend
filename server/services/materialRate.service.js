@@ -26,7 +26,7 @@ function ratesDiffer(before, after) {
 
 export default {
   /**
-   * 자재 요율 공통 설정 조회 (싱글톤)
+   * 품목 요율 공통 설정 조회 (싱글톤)
    * - 없으면 null 반환 (프론트에서 기본값으로 초기화)
    */
   async getInfo() {
@@ -36,7 +36,7 @@ export default {
   },
 
   /**
-   * 자재 요율 저장/수정
+   * 품목 요율 저장/수정
    * - 싱글톤: 최상위 1건만 유지 (id 없으면 create, 있으면 update)
    * - 기존 대비 요율이 하나라도 변경되면 MaterialRateHistory 에 스냅샷 기록
    * - CREATE 시에도 초기 스냅샷 1건 기록

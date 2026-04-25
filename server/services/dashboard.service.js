@@ -8,7 +8,7 @@ export default {
    * - 오늘 입/출고/매출/반품/재고이동 수량
    * - 현재 총 재고량
    * - 30일 입고/출고/반품 차트 (일자별 수량 groupBy)
-   * - 재고 TOP 10 / 안전재고 미달 자재
+   * - 재고 TOP 10 / 안전재고 미달 품목
    * - 최근 감사 로그 10건
    * - 이번 달 매출·지출·순이익 계산 (InboundDailyStat / OutboundDailyStat 합계)
    */

@@ -7,7 +7,7 @@ import {
 import { permission } from "../middleware/permission.js";
 
 /**
- * 자재 요율 공통 설정(MaterialRate) 라우트 (/api/materialRate/*)
+ * 품목 요율 공통 설정(MaterialRate) 라우트 (/api/materialRate/*)
  * 싱글톤 관리 + 변경 스냅샷 이력 조회
  */
 export default async function materialRateRoutes(app) {

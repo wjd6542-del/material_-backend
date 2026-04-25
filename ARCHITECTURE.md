@@ -1,4 +1,4 @@
-# 자재관리 서버 (material-server) 아키텍처 & 모델 설계 분석
+# 품목관리 서버 (material-server) 아키텍처 & 모델 설계 분석
 
 > 작성일: 2026-04-18 (최종 갱신: 2026-04-24)
 > 대상 커밋: `main` @ f766372 기준
@@ -20,8 +20,8 @@
 
 ## 1. 시스템 개요
 
-Fastify + Prisma(MySQL) 기반 자재·창고·재고·입출고·반품·통계·감사 로그·권한을 제공하는 백엔드 서버.
-단일 프로세스 / 단일 DB 구조로 중소 규모 자재창고 운영을 위한 관리 시스템이다.
+Fastify + Prisma(MySQL) 기반 품목·창고·재고·입출고·반품·통계·감사 로그·권한을 제공하는 백엔드 서버.
+단일 프로세스 / 단일 DB 구조로 중소 규모 품목창고 운영을 위한 관리 시스템이다.
 
 | 항목 | 값 |
 | --- | --- |
@@ -66,7 +66,7 @@ server/
 ├── socket/                 # Socket.IO 이벤트 핸들러 (chat.socket.js)
 ├── validators/             # Zod 스키마
 ├── utils/qrcode.js
-└── uploads/                # 업로드된 자재 이미지 실제 저장 경로
+└── uploads/                # 업로드된 품목 이미지 실제 저장 경로
 ```
 
 **자동 라우트 로드**: `index.js` 가 `routes/` 디렉토리를 읽어 모든 `*.js` 를 `/api/<파일명>` prefix 로 자동 등록한다. 라우트를 추가하려면 파일만 떨어뜨리면 된다 (예: `business.js` 추가 → `/api/business/*` 즉시 활성).
@@ -166,15 +166,15 @@ deleteById(id), batchDelete(rows), batchSave(rows), save(row, tx?)
 
 ## 5. 도메인 모델 설계 분석
 
-자재관리 도메인은 크게 **재고(Stock)** 를 중심으로 **입고 → 출고 → 반품** 3가지 거래 흐름이 돌아가며, 이를 **창고·위치·선반** 계층이 물리적으로 받치고, **역할·권한·감사** 가 운영 통제를 담당한다.
+품목관리 도메인은 크게 **재고(Stock)** 를 중심으로 **입고 → 출고 → 반품** 3가지 거래 흐름이 돌아가며, 이를 **창고·위치·선반** 계층이 물리적으로 받치고, **역할·권한·감사** 가 운영 통제를 담당한다.
 
 ### 5.1 모델 카테고리
 
 | 영역 | 모델 |
 | --- | --- |
 | 계정·권한 | `Role`, `User`, `UserIpWhitelist`, `Permission`, `RolePermission` |
-| 자재 | `MaterialCategory`, `Material` (가격 6 + 요율 5), `MaterialImage`, `Tag`, `MaterialTag` |
-| 자재 가격·요율 이력 | `MaterialPriceHistory` (자재별 스냅샷), `MaterialRate` (싱글톤) / `MaterialRateHistory` |
+| 품목 | `MaterialCategory`, `Material` (가격 6 + 요율 5), `MaterialImage`, `Tag`, `MaterialTag` |
+| 품목 가격·요율 이력 | `MaterialPriceHistory` (품목별 스냅샷), `MaterialRate` (싱글톤) / `MaterialRateHistory` |
 | 공급업체/거래처 | `Supplier` (type·금액·사업자번호·계좌·주소 등 확장), `SupplierHistory` (enum `SupplierType`) |
 | 사업자 | `Business` |
 | 물리적 위치 | `Warehouse` → `Location` → `Shelf` |
@@ -197,14 +197,14 @@ MaterialCategory (self-ref parent/children, path/depth)
         ▼
 Material ─┬─ MaterialImage (다중 이미지)
           ├─ MaterialTag ── Tag
-          ├─ Stock (N:1 자재, N:1 창고/위치/선반)
+          ├─ Stock (N:1 품목, N:1 창고/위치/선반)
           ├─ InboundItem  ── Inbound  ── User
           ├─ OutboundItem ── Outbound ── User
           └─ ReturnOrderItem ── ReturnOrder ── User
                (Supplier 는 InboundItem/OutboundItem 에 FK)
 
 Warehouse ── Location ── Shelf
-   (각 거래 라인은 (자재, 창고, 위치, 선반) 4중 키로 물리적 지점 특정)
+   (각 거래 라인은 (품목, 창고, 위치, 선반) 4중 키로 물리적 지점 특정)
 
 Stock ── StockHistory (모든 변동 이력, type: INBOUND/OUTBOUND/RETURNORDER/TRANSFER_IN/TRANSFER_OUT/ADJUST)
 
@@ -223,7 +223,7 @@ model Stock {
 }
 ```
 
-- **의미**: "자재×창고×위치×선반" 네 축으로 하나의 재고 셀이 정의된다
+- **의미**: "품목×창고×위치×선반" 네 축으로 하나의 재고 셀이 정의된다
 - **효과**: 업서트/증감을 단일 행에 대한 원자적 연산으로 처리 가능
 - **주의**: shelf_id 는 nullable 이라 "선반 미지정" 상태의 재고도 허용
 - **조회 패턴**: `prisma.stock.groupBy({ by: ["warehouse_id", "material_id"], _sum })` 같은 2/3차원 집계가 서비스 전반(warehousStock / locationStock / shelfStock)에 반복된다
@@ -405,12 +405,12 @@ ChatMessage
 - 소켓을 병행한 이유: 실시간성 요구(타이핑감, 즉시 반영)가 polling 으로 커버 불가
 - Soft delete 이유: 감사성·복구 가능성 + "삭제된 메시지입니다" 플레이스홀더로 대화 흐름 보존
 
-### 5.11 자재 가격·요율 관리
+### 5.11 품목 가격·요율 관리
 
-자재 단위 가격과 전사 공통 요율 프리셋을 분리 운영한다.
+품목 단위 가격과 전사 공통 요율 프리셋을 분리 운영한다.
 
 ```
-Material (자재별 값 저장)
+Material (품목별 값 저장)
 ├─ 가격 6종:  inbound_price, outbound_price1/2, wholesale_price1/2, online_price
 └─ 요율 5종:  outbound_rate1/2, wholesale_rate1/2, online_rate
        │
@@ -428,7 +428,7 @@ MaterialRateHistory
   - 요율 5종 스냅샷, 값 1개라도 변경 시 기록
 ```
 
-- **용도 분리**: `MaterialRate` 는 자재 등록 화면의 초기값 제공용, 실제 계산에 쓰이는 값은 `Material.*_rate`
+- **용도 분리**: `MaterialRate` 는 품목 등록 화면의 초기값 제공용, 실제 계산에 쓰이는 값은 `Material.*_rate`
 - **필드명 일치**: `MaterialRate` 의 요율 컬럼명을 Material 과 동일하게 맞춰 프론트에서 그대로 바인딩 가능
 - **엔드포인트**: `/api/material/priceHistory`, `/api/materialRate/info|save|history`
 
@@ -529,9 +529,9 @@ SupplierHistory (FK supplier_id, onDelete: Cascade)
 | Prefix | 책임 | 주요 특이사항 |
 | --- | --- | --- |
 | `/api/auth` | 로그인/회원가입/비밀번호 재설정 | JWT(3h), Resend 이메일 인증 |
-| `/api/material` | 자재 마스터 + 이미지 + 태그 | multipart 업로드, QR 생성 |
-| `/api/category` | 자재 카테고리 트리 | path/depth, 자식→부모 순 삭제 |
-| `/api/tag` | 태그 + 자재-태그 매핑 | `syncMaterialTags` 재동기화 |
+| `/api/material` | 품목 마스터 + 이미지 + 태그 | multipart 업로드, QR 생성 |
+| `/api/category` | 품목 카테고리 트리 | path/depth, 자식→부모 순 삭제 |
+| `/api/tag` | 태그 + 품목-태그 매핑 | `syncMaterialTags` 재동기화 |
 | `/api/supplier` | 공급업체 | |
 | `/api/business` | 사업자(등록번호·회사명·대표·주소·연락처·FAX) | 독립 마스터, 공통 CRUD 6종 |
 | `/api/warehouse` | 창고 (도면 좌표 포함) | 삭제 시 Location/Shelf cascade |
@@ -592,4 +592,4 @@ SupplierHistory (FK supplier_id, onDelete: Cascade)
 
 ## 10. 요약
 
-이 서버는 **"재고(Stock) = 자재×창고×위치×선반 4축의 실시간 수량" + "StockHistory = 모든 움직임의 완전한 이력"** 이라는 두 축 위에 입고·출고·반품·발주 전표가 얹어진 구조다. 모든 DB 변경은 자동 감사되고, 일 단위 집계 테이블이 대시보드 쿼리를 분리해 받쳐준다. RBAC·IP 화이트리스트·API Key 로 보안이 3중으로 잠겨 있고, 도메인 라우트는 파일을 추가하는 것만으로 자동 등록된다. 직원간 실시간 협업은 Socket.IO 기반 채팅(전체 공지방 + 1:1 DM, soft delete) 이 HTTP 레이어와 공존한다. 설계 의도가 일관되어 있어 확장성과 감사성 양쪽이 잘 확보된 소형 자재관리 WMS 구조라고 평가할 수 있다.
+이 서버는 **"재고(Stock) = 품목×창고×위치×선반 4축의 실시간 수량" + "StockHistory = 모든 움직임의 완전한 이력"** 이라는 두 축 위에 입고·출고·반품·발주 전표가 얹어진 구조다. 모든 DB 변경은 자동 감사되고, 일 단위 집계 테이블이 대시보드 쿼리를 분리해 받쳐준다. RBAC·IP 화이트리스트·API Key 로 보안이 3중으로 잠겨 있고, 도메인 라우트는 파일을 추가하는 것만으로 자동 등록된다. 직원간 실시간 협업은 Socket.IO 기반 채팅(전체 공지방 + 1:1 DM, soft delete) 이 HTTP 레이어와 공존한다. 설계 의도가 일관되어 있어 확장성과 감사성 양쪽이 잘 확보된 소형 품목관리 WMS 구조라고 평가할 수 있다.

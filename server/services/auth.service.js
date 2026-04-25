@@ -272,7 +272,7 @@ export default {
     // 2. 메일로 인증코드 발송
     await sendMail({
       email,
-      subject: "자재관리 시스템 알림",
+      subject: "품목관리 시스템 알림",
       html: `
       <h3>${user.username} 님</h3>
       <p>발급된 코드로 인증후 비밀번호를 변경처리 하세요.</p>

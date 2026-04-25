@@ -88,7 +88,7 @@ export default {
     return item;
   },
 
-  /** 카테고리 단건 삭제 (자식·자재 연결 무시) */
+  /** 카테고리 단건 삭제 (자식·품목 연결 무시) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     return prisma.materialCategory.delete({ where: { id } });
@@ -136,7 +136,7 @@ export default {
   /**
    * 일괄 저장 (재귀 트리 구조)
    * - 프론트 트리에 없는 기존 노드는 삭제 처리
-   * - 자재(Material)가 연결된 카테고리는 삭제하지 않음
+   * - 품목(Material)가 연결된 카테고리는 삭제하지 않음
    * @param {*} data
    */
   async batchSave(data = []) {
@@ -158,7 +158,7 @@ export default {
         .map((row) => row.id)
         .filter((id) => !incomingIds.has(id));
 
-      // 4. 삭제 대상 중 자재가 연결된 카테고리 확인
+      // 4. 삭제 대상 중 품목가 연결된 카테고리 확인
       if (deleteTargetIds.length > 0) {
         const linkedCategories = await tx.material.findMany({
           where: { category_id: { in: deleteTargetIds } },

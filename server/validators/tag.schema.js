@@ -30,7 +30,7 @@ export const batchDeleteSchema = z
   )
   .min(1, "삭제할 데이터가 없습니다.");
 
-// 자재-태그 연결 스키마
+// 품목-태그 연결 스키마
 export const materialTagLinkSchema = z.object({
   material_id: z.coerce.number().int().positive(),
   tag_ids: z.array(z.coerce.number().int().positive()).default([]),

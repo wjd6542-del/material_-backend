@@ -108,7 +108,7 @@ export default {
   },
 
   /**
-   * 입고 아이템(InboundItem) 리스트 (자재/창고/위치/공급업체/기간 필터)
+   * 입고 아이템(InboundItem) 리스트 (품목/창고/위치/공급업체/기간 필터)
    * @param {Object} data
    */
   async detailList(data) {

@@ -9,7 +9,7 @@ import {
 
 /**
  * 태그(Tag) 라우트 (/api/tag/*)
- * 태그 마스터 CRUD + 자재-태그 매핑 동기화
+ * 태그 마스터 CRUD + 품목-태그 매핑 동기화
  */
 export default async function tagRoutes(app) {
   /** 태그 전체 리스트 @route POST /api/tag/allList */

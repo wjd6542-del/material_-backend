@@ -8,8 +8,8 @@ import {
 import { permission } from "../middleware/permission.js";
 
 /**
- * 자재 카테고리(MaterialCategory) 라우트 (/api/category/*)
- * 자재 분류 트리(parent/child + path/depth 관리) CRUD
+ * 품목 카테고리(MaterialCategory) 라우트 (/api/category/*)
+ * 품목 분류 트리(parent/child + path/depth 관리) CRUD
  */
 export default async function categoryRoutes(app) {
   /** 카테고리 전체 리스트 @route POST /api/category/allList */

@@ -20,7 +20,7 @@ export default {
    * 출고 현황 집계 (보드 카드/대시보드용)
    * - 전체 출고 전표 수
    * - 아이템 수량/판매금액/원가금액/이익 합계
-   * - 자재명별 그룹 카운트 ($queryRaw 사용)
+   * - 품목명별 그룹 카운트 ($queryRaw 사용)
    */
   async boardCount() {
     const totalCount = await prisma.outbound.count();
@@ -97,7 +97,7 @@ export default {
   },
 
   /**
-   * 출고 아이템(OutboundItem) 리스트 (자재/창고/위치/기간 필터)
+   * 출고 아이템(OutboundItem) 리스트 (품목/창고/위치/기간 필터)
    */
   async detailList(data) {
     const where = {};
@@ -154,7 +154,7 @@ export default {
 
   /**
    * 반품 가능 출고 아이템 목록 (반품 전표 작성 화면용)
-   * material_id / searchText(자재명·코드) / 기간 필터
+   * material_id / searchText(품목명·코드) / 기간 필터
    */
   async returnList(data) {
     const where = {};
@@ -163,7 +163,7 @@ export default {
       where.material_id = data.material_id;
     }
 
-    // 자재명, 자재코드 검색
+    // 품목명, 품목코드 검색
     if (data?.searchText) {
       const materials = await prisma.material.findMany({
         where: {
@@ -241,7 +241,7 @@ export default {
         items: {
           include: {
             warehouse: true,
-            material: true, // 자재
+            material: true, // 품목
             location: true, // 위치
           },
         },

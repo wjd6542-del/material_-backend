@@ -84,7 +84,7 @@ class StatService {
   // 리스트 조회
   // ==============================
 
-  /** 입고 일별 통계 리스트 (기간/자재 필터, 최신순) */
+  /** 입고 일별 통계 리스트 (기간/품목 필터, 최신순) */
   async inboundList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -144,7 +144,7 @@ class StatService {
     }));
   }
 
-  /** 재고 일별 스냅샷 리스트 (자재·창고 조인) */
+  /** 재고 일별 스냅샷 리스트 (품목·창고 조인) */
   async stockList(data) {
     const where = {
       ...this.buildDateWhere(data),
@@ -173,7 +173,7 @@ class StatService {
   // ==============================
   /**
    * 지정일 기준 입고 일별 통계(InboundDailyStat) 재생성
-   * InboundItem 을 자재별 groupBy 한 뒤 기존 레코드 삭제 후 일괄 생성.
+   * InboundItem 을 품목별 groupBy 한 뒤 기존 레코드 삭제 후 일괄 생성.
    * cron 배치(매일 00:10)와 수동 API 양쪽에서 호출.
    * @param {string|null} date 'YYYY-MM-DD' (null 이면 오늘)
    * @returns {Promise<{type:'inbound',count:number}>}
@@ -239,7 +239,7 @@ class StatService {
   // ==============================
   /**
    * 지정일 기준 출고 일별 통계(OutboundDailyStat) 재생성
-   * 자재별 수량/판매금액/원가/이익 합계를 저장.
+   * 품목별 수량/판매금액/원가/이익 합계를 저장.
    */
   async createOutboundDailyStat(date = null) {
     const { start, end, target } = this.getDateRange(date);
@@ -369,7 +369,7 @@ class StatService {
   // ==============================
   /**
    * 지정일 기준 재고 일별 스냅샷(StockDailySnapshot) 재생성
-   * Stock 을 자재×창고 단위로 groupBy 해 수량 합계 저장
+   * Stock 을 품목×창고 단위로 groupBy 해 수량 합계 저장
    * (location/shelf 는 합산 대상 아님)
    */
   async createStockDailyStat(date = null) {

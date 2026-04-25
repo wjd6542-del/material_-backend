@@ -6,7 +6,7 @@ export const idParamSchema = z.object({
 
 /**
  * 프론트 전송 기준 유효성 검사
- * - material_id: 자재 PK (프론트 모달에서 선택되어 넘어옴, 필수)
+ * - material_id: 품목 PK (프론트 모달에서 선택되어 넘어옴, 필수)
  * - material_code / material_name / spec: 표시용 (서버 저장 시 무시)
  * - supply_amount / vat: 프론트 계산값이나 서버에서 재계산해 덮어씀
  * - memo: 적요 (DB 컬럼은 remark)
@@ -19,7 +19,7 @@ export const itemsSchema = z.object({
       if (val === undefined) return undefined;
       return val < 0 ? 0 : val;
     }),
-  material_id: z.coerce.number().int().min(1, "자재를 선택해야 합니다."),
+  material_id: z.coerce.number().int().min(1, "품목를 선택해야 합니다."),
   material_code: z.string().trim().optional(),
   material_name: z.string().trim().optional(),
   spec: z.string().trim().optional().nullable(),

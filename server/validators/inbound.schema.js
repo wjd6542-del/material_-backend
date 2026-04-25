@@ -12,7 +12,7 @@ export const itemsSchema = z.object({
       if (val === undefined) return undefined;
       return val < 0 ? 0 : val;
     }),
-  material_id: z.coerce.number().int().min(1, "자재를 선택해야 합니다."),
+  material_id: z.coerce.number().int().min(1, "품목를 선택해야 합니다."),
   supplier_id: z.coerce.number().int().min(1, "거래처를 선택해야 합니다."),
   warehouse_id: z.coerce.number().int().min(1, "창고를 선택해야 합니다."),
   location_id: z.coerce.number().int().min(1, "창고위치를 선택해야 합니다."),

@@ -27,7 +27,7 @@ export default async function purchaseOrderRoutes(app) {
   );
 
   /**
-   * 발주 품목(상세) 리스트 조회 (자재/거래처/상태/기간 필터)
+   * 발주 품목(상세) 리스트 조회 (품목/거래처/상태/기간 필터)
    * @route POST /api/purchaseOrder/detail/list
    */
   app.post(

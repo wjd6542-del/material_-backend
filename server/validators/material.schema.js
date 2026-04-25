@@ -30,12 +30,12 @@ export const saveSchema = z.object({
 
   name: z
     .string({
-      required_error: "자재명을 입력해주세요.",
-      invalid_type_error: "자재명이 올바르지 않습니다.",
+      required_error: "품목명을 입력해주세요.",
+      invalid_type_error: "품목명이 올바르지 않습니다.",
     })
     .trim()
-    .min(1, "자재명은 1자 이상 입력해주세요.")
-    .max(200, "자재명은 100자 이하로 입력해주세요."),
+    .min(1, "품목명은 1자 이상 입력해주세요.")
+    .max(200, "품목명은 100자 이하로 입력해주세요."),
 
   category_id: z.coerce.number({
     required_error: "카테고리를 선택해주세요.",
@@ -44,12 +44,12 @@ export const saveSchema = z.object({
 
   code: z
     .string({
-      required_error: "자재코드를 입력해주세요.",
-      invalid_type_error: "자재코드이 올바르지 않습니다.",
+      required_error: "품목코드를 입력해주세요.",
+      invalid_type_error: "품목코드이 올바르지 않습니다.",
     })
     .trim()
-    .min(1, "자재코드는 1자 이상 입력해주세요.")
-    .max(200, "자재코드는 100자 이하로 입력해주세요."),
+    .min(1, "품목코드는 1자 이상 입력해주세요.")
+    .max(200, "품목코드는 100자 이하로 입력해주세요."),
 
   spec: z.coerce.string().optional(),
   unit: z.coerce.string().optional(),
@@ -79,12 +79,12 @@ export const updateSchema = z.object({
 
   name: z
     .string({
-      required_error: "자재명을 입력해주세요.",
-      invalid_type_error: "자재명이 올바르지 않습니다.",
+      required_error: "품목명을 입력해주세요.",
+      invalid_type_error: "품목명이 올바르지 않습니다.",
     })
     .trim()
-    .min(1, "자재명은 1자 이상 입력해주세요.")
-    .max(200, "자재명은 100자 이하로 입력해주세요."),
+    .min(1, "품목명은 1자 이상 입력해주세요.")
+    .max(200, "품목명은 100자 이하로 입력해주세요."),
 
   category_id: z.coerce.number({
     required_error: "카테고리를 선택해주세요.",
@@ -93,12 +93,12 @@ export const updateSchema = z.object({
 
   code: z
     .string({
-      required_error: "자재코드를 입력해주세요.",
-      invalid_type_error: "자재코드이 올바르지 않습니다.",
+      required_error: "품목코드를 입력해주세요.",
+      invalid_type_error: "품목코드이 올바르지 않습니다.",
     })
     .trim()
-    .min(1, "자재코드는 1자 이상 입력해주세요.")
-    .max(200, "자재코드는 100자 이하로 입력해주세요."),
+    .min(1, "품목코드는 1자 이상 입력해주세요.")
+    .max(200, "품목코드는 100자 이하로 입력해주세요."),
 
   spec: z.coerce.string().optional(),
   unit: z.coerce.string().optional(),

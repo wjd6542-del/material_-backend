@@ -86,7 +86,7 @@ async function unlinkIfExists(filePath) {
 }
 
 /**
- * 자재-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tagIds 로 재생성)
+ * 품목-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tagIds 로 재생성)
  * @param {Prisma.TransactionClient} tx
  * @param {number} materialId
  * @param {number[]} tagIds
@@ -103,13 +103,13 @@ async function syncMaterialTags(tx, materialId, tagIds) {
   });
 }
 
-/** 자재 생성/수정 시 MATERIAL 타입 알림 생성 */
+/** 품목 생성/수정 시 MATERIAL 타입 알림 생성 */
 async function createNotification(tx, user, post, isCreate) {
   await tx.notification.create({
     data: {
       user_id: user.id,
       type: "MATERIAL",
-      title: isCreate ? "자재 추가" : "자재 수정",
+      title: isCreate ? "품목 추가" : "품목 수정",
       action: isCreate ? "CREATE" : "UPDATE",
       message: `${post.code} 재고 정보가 ${isCreate ? "등록" : "수정"} 되었습니다.`,
       target_type: "material",
@@ -191,7 +191,7 @@ async function removeImageRecordsAndCollectPaths(tx, materialId, deleteImageIds)
 
 export default {
   /**
-   * 이번 달 1일 00:00 ~ 다음 달 1일 범위로 생성된 자재 리스트 (대시보드용)
+   * 이번 달 1일 00:00 ~ 다음 달 1일 범위로 생성된 품목 리스트 (대시보드용)
    * @param {{limit?:number}} data
    * @returns {Promise<Array<{id:number,name:string,code:string,created_at:Date}>>}
    */
@@ -217,7 +217,7 @@ export default {
   },
 
   /**
-   * 자재 가격 이력 리스트 (역방향 페이지네이션, changed_by 이름 포함)
+   * 품목 가격 이력 리스트 (역방향 페이지네이션, changed_by 이름 포함)
    * @param {{material_id:number, beforeId?:number, limit?:number}} data
    * @returns {Promise<Array<{...MaterialPriceHistory, changed_by_name:string}>>}
    */
@@ -257,7 +257,7 @@ export default {
   },
 
   /**
-   * 자재 페이지네이션 리스트 (page/limit/keyword/기간 필터)
+   * 품목 페이지네이션 리스트 (page/limit/keyword/기간 필터)
    * @param {{page?:number,limit?:number,keyword?:string,startDate?:string,endDate?:string}} data
    */
   async getPageList(data) {
@@ -289,7 +289,7 @@ export default {
   },
 
   /**
-   * 자재 리스트 (material_ids/category/keyword/tag/기간 필터, 최대 50건, QR 포함)
+   * 품목 리스트 (material_ids/category/keyword/tag/기간 필터, 최대 50건, QR 포함)
    * @param {Object} data
    * @returns {Promise<Array>}
    */
@@ -346,7 +346,7 @@ export default {
   },
 
   /**
-   * 자재 단건 조회 (category/images/tags 포함)
+   * 품목 단건 조회 (category/images/tags 포함)
    * @param {number} id
    */
   async getById(id) {
@@ -363,7 +363,7 @@ export default {
   },
 
   /**
-   * 자재 단건 삭제 (이미지 파일 디스크 + MaterialImage + Material 순서로 삭제)
+   * 품목 단건 삭제 (이미지 파일 디스크 + MaterialImage + Material 순서로 삭제)
    * @param {number} id
    */
   async deleteById(id) {
@@ -391,7 +391,7 @@ export default {
   },
 
   /**
-   * 자재 일괄 삭제 (Promise.all + deleteById 각 건 실행, 실패 건 인덱스 포함 에러)
+   * 품목 일괄 삭제 (Promise.all + deleteById 각 건 실행, 실패 건 인덱스 포함 에러)
    * @param {Array<{id:number}>} data
    */
   async batchDelete(data = []) {
@@ -413,7 +413,7 @@ export default {
   },
 
   /**
-   * 자재 생성/수정 트랜잭션
+   * 품목 생성/수정 트랜잭션
    * - id 없으면 생성(code 중복 체크), 있으면 수정 + deleteImageIds 처리
    * - 디스크 I/O 와 DB 트랜잭션을 분리해 불일치를 방지한다:
    *   1) 신규 업로드는 tx 전에 디스크 기록 → tx 실패 시 cleanup
@@ -445,7 +445,7 @@ export default {
             where: { code: fields.code },
           });
           if (exist) {
-            throw new Error("이미 존재하는 자재 코드입니다.");
+            throw new Error("이미 존재하는 품목 코드입니다.");
           }
 
           innerPost = await tx.material.create({ data: fields });

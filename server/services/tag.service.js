@@ -111,7 +111,7 @@ export default {
   },
 
   /**
-   * 특정 자재에 연결된 태그 목록 (tag.sort asc)
+   * 특정 품목에 연결된 태그 목록 (tag.sort asc)
    */
   async getByMaterial(material_id) {
     if (!material_id) {
@@ -127,7 +127,7 @@ export default {
   },
 
   /**
-   * 자재-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tag_ids 로 재생성)
+   * 품목-태그 매핑 동기화 (기존 매핑 전부 삭제 후 tag_ids 로 재생성)
    * @param {{material_id:number, tag_ids:number[]}} param
    */
   async syncMaterialTags({ material_id, tag_ids = [] }) {

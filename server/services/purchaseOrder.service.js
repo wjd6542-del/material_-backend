@@ -21,7 +21,7 @@ export default {
 
   /**
    * 발주 전표 리스트 (order_no 검색, 기간·상태·거래처 필터)
-   * 각 전표에 supplier_name / 발주번호 QR / items 자재명 / 작성자·수정자 이름 포함 반환
+   * 각 전표에 supplier_name / 발주번호 QR / items 품목명 / 작성자·수정자 이름 포함 반환
    */
   async getList(data) {
     const where = {};
@@ -99,7 +99,7 @@ export default {
   },
 
   /**
-   * 발주 품목(PurchaseOrderItem) 리스트 (자재/거래처/상태/기간 필터)
+   * 발주 품목(PurchaseOrderItem) 리스트 (품목/거래처/상태/기간 필터)
    * - startDate/endDate: 발주 전표 created_at
    * - orderStartDate/orderEndDate: 발주일자 order_date
    * - deliveryStartDate/deliveryEndDate: 납기일자 delivery_date

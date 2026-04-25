@@ -11,7 +11,7 @@ import { permission } from "../middleware/permission.js";
 
 /**
  * 재고(Stock) 라우트 (/api/stock/*)
- * 자재×창고×위치×선반 단위 실시간 재고 조회/이동/이력 제공
+ * 품목×창고×위치×선반 단위 실시간 재고 조회/이동/이력 제공
  */
 export default async function stockRoutes(app) {
   /** 재고 전체 리스트 @route POST /api/stock/allList */
@@ -37,7 +37,7 @@ export default async function stockRoutes(app) {
     },
   );
 
-  /** 안전재고 미달 자재 (대시보드) @route POST /api/stock/lowStockMaterials */
+  /** 안전재고 미달 품목 (대시보드) @route POST /api/stock/lowStockMaterials */
   app.post(
     "/lowStockMaterials",
     { preHandler: permission("dashboard.view") },

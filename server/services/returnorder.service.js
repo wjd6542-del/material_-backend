@@ -42,7 +42,7 @@ export default {
         },
       });
 
-      // 3. 자재별 반품 빈도 (Raw Query 문법 수정)
+      // 3. 품목별 반품 빈도 (Raw Query 문법 수정)
       // 테이블명이 @map("return_order_items")로 되어 있는지 확인하세요.
       const rows = await prisma.$queryRaw`
         SELECT 
@@ -53,7 +53,7 @@ export default {
         GROUP BY m.name
       `;
 
-      // 4. 결과를 { "자재명": 갯수 } 형태로 변환
+      // 4. 결과를 { "품목명": 갯수 } 형태로 변환
       const groupCount = rows.reduce((acc, row) => {
         acc[row.name] = Number(row.count);
         return acc;
@@ -115,7 +115,7 @@ export default {
   },
 
   /**
-   * 반품 아이템(ReturnOrderItem) 리스트 (자재/창고/위치/상태/기간 필터)
+   * 반품 아이템(ReturnOrderItem) 리스트 (품목/창고/위치/상태/기간 필터)
    */
   async getDetailList(data) {
     const where = {};
@@ -180,7 +180,7 @@ export default {
   },
 
   /**
-   * 반품 전표 단건 상세 조회 (items + 창고/자재/위치 포함)
+   * 반품 전표 단건 상세 조회 (items + 창고/품목/위치 포함)
    */
   async getById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400);

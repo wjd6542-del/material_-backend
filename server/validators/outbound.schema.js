@@ -6,7 +6,7 @@ export const idParamSchema = z.object({
 
 export const itemsSchema = z.object({
   id: z.coerce.number().optional(),
-  material_id: z.coerce.number().int().min(1, "자재를 선택해야 합니다."),
+  material_id: z.coerce.number().int().min(1, "품목를 선택해야 합니다."),
   supplier_id: z.coerce.number().int().min(1, "거래처를 선택해야 합니다."),
   warehouse_id: z.coerce.number().int().min(1, "창고를 선택해야 합니다."),
   location_id: z.coerce.number().int().min(1, "창고위치를 선택해야 합니다."),
