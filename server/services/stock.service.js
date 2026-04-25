@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { ensureStockRow, lockStockById } from "./stock.lock.js";
 
 export default {
   /**
@@ -582,7 +583,7 @@ export default {
       const fromWarehouseId = fromLocation.warehouse_id;
       const toWarehouseId = toLocation.warehouse_id;
 
-      // 🔥 1. 출발 재고 조회 (shelf 미지정 재고 기준)
+      // 🔥 1. 출발 재고 조회 (shelf 미지정 재고 기준) — 존재 확인 + 부수 정보 수집
       const fromStock = await tx.stock.findUnique({
         where: {
           material_id_warehouse_id_location_id_shelf_id: {
@@ -602,17 +603,41 @@ export default {
         throw new Error("출발 재고 없음");
       }
 
-      if (fromStock.quantity < quantity) {
+      const fromShelfId = fromStock.shelf_id ?? null;
+
+      // 🔥 2. 도착 행 보장(upsert, 잠금 없이) — 이후 id 오름차순으로 잠금
+      const toStockRow = await ensureStockRow(
+        tx,
+        {
+          material_id,
+          warehouse_id: toWarehouseId,
+          location_id: to_location_id,
+          shelf_id: fromShelfId,
+        },
+        user.id,
+      );
+
+      // 🔥 3. deadlock 방지: 두 행을 id 오름차순으로 FOR UPDATE
+      const orderedIds = [fromStock.id, toStockRow.id].sort((a, b) => a - b);
+      const locks = {};
+      for (const id of orderedIds) {
+        const l = await lockStockById(tx, id);
+        if (!l) throw new Error(`Stock 행 잠금 실패 (id=${id})`);
+        locks[id] = l;
+      }
+      const fromLocked = locks[fromStock.id];
+      const toLocked = locks[toStockRow.id];
+
+      if (fromLocked.quantity < quantity) {
         throw new Error("재고 부족");
       }
 
-      const fromBefore = fromStock.quantity;
+      const fromBefore = fromLocked.quantity;
       const fromAfter = fromBefore - quantity;
-      const fromAvgCost = Number(fromStock.avg_cost ?? 0);
+      const fromAvgCost = fromLocked.avg_cost;
       const transferAmount = fromAvgCost * quantity;
-      const fromShelfId = fromStock.shelf_id ?? null;
 
-      // 🔥 2. 출발지 차감 (stock_value 재계산, avg_cost 유지)
+      // 🔥 4. 출발지 차감 (stock_value 재계산, avg_cost 유지)
       await tx.stock.update({
         where: { id: fromStock.id },
         data: {
@@ -622,62 +647,25 @@ export default {
         },
       });
 
-      // 🔥 3. 도착 재고 조회 (출발 shelf_id 그대로 보존)
-      const toStock = await tx.stock.findUnique({
-        where: {
-          material_id_warehouse_id_location_id_shelf_id: {
-            material_id,
-            warehouse_id: toWarehouseId,
-            location_id: to_location_id,
-            shelf_id: fromShelfId,
-          },
-        },
-        include: {
-          location: true,
+      // 🔥 5. 도착지 증가 (이동평균 병합)
+      const toBefore = toLocked.quantity;
+      const toStockId = toLocked.id;
+      const toOldAvg = toLocked.avg_cost;
+      const toAfter = toBefore + quantity;
+      const mergedAvg =
+        toAfter > 0
+          ? (toBefore * toOldAvg + quantity * fromAvgCost) / toAfter
+          : 0;
+
+      await tx.stock.update({
+        where: { id: toStockId },
+        data: {
+          quantity: toAfter,
+          avg_cost: mergedAvg,
+          stock_value: toAfter * mergedAvg,
+          updated_by: user.id,
         },
       });
-
-      let toBefore = 0;
-      let toStockId = null;
-
-      // 🔥 4. 도착지 증가 or 생성
-      if (toStock) {
-        toBefore = toStock.quantity;
-        toStockId = toStock.id;
-
-        // 이동평균 병합 (도착지에 기존 재고가 있으면 단가가 다를 수 있으므로 재계산)
-        const toOldAvg = Number(toStock.avg_cost ?? 0);
-        const toAfter = toBefore + quantity;
-        const mergedAvg =
-          toAfter > 0
-            ? (toBefore * toOldAvg + quantity * fromAvgCost) / toAfter
-            : 0;
-
-        await tx.stock.update({
-          where: { id: toStock.id },
-          data: {
-            quantity: toAfter,
-            avg_cost: mergedAvg,
-            stock_value: toAfter * mergedAvg,
-            updated_by: user.id,
-          },
-        });
-      } else {
-        const created = await tx.stock.create({
-          data: {
-            material_id,
-            warehouse_id: toWarehouseId,
-            location_id: to_location_id,
-            shelf_id: fromShelfId,
-            quantity,
-            avg_cost: fromAvgCost,
-            stock_value: fromAvgCost * quantity,
-            updated_by: user.id,
-          },
-        });
-
-        toStockId = created.id;
-      }
 
       // 🔥 5. 이력 기록 (OUT)
       await tx.stockHistory.create({

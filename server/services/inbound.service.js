@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { ensureAndLockStock } from "./stock.lock.js";
 
 /**
  * InboundItem 배열을 supplier_id 별 supply_amount 합계 Map 으로 집계
@@ -218,15 +219,12 @@ export default {
       shelf_id: item.shelf_id ?? null,
     };
 
-    const stock = await tx.stock.findUnique({
-      where: {
-        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
-      },
-    });
+    // 동시성 보호: 행 보장 + FOR UPDATE 잠금 후 최신 값 조회
+    const locked = await ensureAndLockStock(tx, uniqueKey, userId);
 
-    const beforeQty = stock?.quantity ?? 0;
+    const beforeQty = locked.quantity;
     const afterQty = beforeQty + diffQty;
-    const oldAvgCost = Number(stock?.avg_cost ?? 0);
+    const oldAvgCost = locked.avg_cost;
     const unitCost = Number(item.price ?? 0);
 
     // 이동평균 단가 계산
@@ -243,21 +241,9 @@ export default {
 
     const amount = unitCost * diffQty;
 
-    const stockRow = await tx.stock.upsert({
-      where: {
-        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
-      },
-      update: {
-        quantity: afterQty,
-        avg_cost: newAvgCost,
-        stock_value: stockValue,
-        updated_by: userId,
-      },
-      create: {
-        material_id: item.material_id,
-        warehouse_id: item.warehouse_id,
-        location_id: item.location_id,
-        shelf_id: item.shelf_id ?? null,
+    const stockRow = await tx.stock.update({
+      where: { id: locked.id },
+      data: {
         quantity: afterQty,
         avg_cost: newAvgCost,
         stock_value: stockValue,

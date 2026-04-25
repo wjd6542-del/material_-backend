@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { ensureAndLockStock } from "./stock.lock.js";
 
 export default {
   /**
@@ -221,19 +222,15 @@ export default {
       shelf_id: item.shelf_id ?? null,
     };
 
-    // 현재 재고 조회 (없으면 null)
-    const existing = await tx.stock.findUnique({
-      where: {
-        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
-      },
-    });
+    // 동시성 보호: 행 보장 + FOR UPDATE 잠금 후 최신 값 조회
+    const locked = await ensureAndLockStock(tx, uniqueKey, userId);
 
-    const beforeQty = existing?.quantity ?? 0;
+    const beforeQty = locked.quantity;
     const afterQty = beforeQty + diffQty;
 
     // 반품은 avg_cost 변동 없음 (기존 값 유지)
     // - 신규 재고 셀이면 item.cost_price 를 초기 avg_cost 로 사용
-    const oldAvgCost = Number(existing?.avg_cost ?? 0);
+    const oldAvgCost = locked.avg_cost;
     const newAvgCost =
       afterQty <= 0
         ? 0
@@ -242,22 +239,9 @@ export default {
           : Number(item.cost_price ?? 0);
     const stockValue = afterQty * newAvgCost;
 
-    // 반품은 해당 위치에 재고가 없을 수도 있으므로 upsert 사용
-    const stock = await tx.stock.upsert({
-      where: {
-        material_id_warehouse_id_location_id_shelf_id: uniqueKey,
-      },
-      update: {
-        quantity: afterQty,
-        avg_cost: newAvgCost,
-        stock_value: stockValue,
-        updated_by: userId,
-      },
-      create: {
-        material_id: item.material_id,
-        warehouse_id: item.warehouse_id,
-        location_id: item.location_id,
-        shelf_id: item.shelf_id ?? null,
+    const stock = await tx.stock.update({
+      where: { id: locked.id },
+      data: {
         quantity: afterQty,
         avg_cost: newAvgCost,
         stock_value: stockValue,

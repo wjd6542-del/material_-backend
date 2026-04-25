@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check /Users/wjd/프로젝트/material-server/server/services/material.service.js)",
+      "Read(//Users/wjd/.claude/projects/**)"
+    ]
+  }
+}

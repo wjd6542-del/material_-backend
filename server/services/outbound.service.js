@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { lockStockById } from "./stock.lock.js";
 
 export default {
   /**
@@ -274,20 +275,27 @@ export default {
           shelf_id: item.shelf_id ?? null,
         },
       },
+      select: { id: true },
     });
 
     if (!stock) {
       throw new AppError("재고가 존재하지 않습니다.");
     }
 
-    const beforeQty = stock.quantity;
+    // 동시성 보호: id 기반 FOR UPDATE 잠금 후 최신 값 조회
+    const locked = await lockStockById(tx, stock.id);
+    if (!locked) {
+      throw new AppError("재고가 존재하지 않습니다.");
+    }
+
+    const beforeQty = locked.quantity;
     const afterQty = beforeQty + diffQty;
 
     if (afterQty < 0) {
       throw new AppError("재고가 부족합니다.");
     }
 
-    const unitCost = Number(stock.avg_cost ?? 0);
+    const unitCost = locked.avg_cost;
     const amount = unitCost * Math.abs(diffQty);
 
     // 출고 시 avg_cost 는 유지, stock_value 는 새 수량으로 재계산
@@ -295,7 +303,7 @@ export default {
     const newStockValue = afterQty <= 0 ? 0 : afterQty * unitCost;
 
     const stockRow = await tx.stock.update({
-      where: { id: stock.id },
+      where: { id: locked.id },
       data: {
         quantity: afterQty,
         stock_value: newStockValue,

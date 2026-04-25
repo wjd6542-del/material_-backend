@@ -119,61 +119,74 @@ async function createNotification(tx, user, post, isCreate) {
 }
 
 /**
- * 업로드된 이미지들을 디스크에 저장하고 MaterialImage 레코드 생성.
- * @param {Prisma.TransactionClient} tx
- * @param {number} materialId
+ * 업로드 파일을 디스크에 먼저 쓰고(트랜잭션 밖) 나중에 DB 에 createMany 할
+ * 준비 레코드 배열을 만들어 반환한다. 트랜잭션 내부에서 파일 쓰기를 하면
+ * 이후 DB 단계 실패 시 이미 쓴 파일이 남거나, 삭제 파일이 돌아오지 않는
+ * DB-디스크 불일치가 발생하므로 쓰기는 무조건 tx 전에 선행한다.
+ * 중간 실패 시 지금까지 쓴 파일은 호출자에서 일괄 삭제해야 한다.
  * @param {Array} files parseMultipart 결과 files 배열
- * @param {string[]} savedFiles 롤백용 파일명 누적 배열 (out-param)
+ * @returns {Promise<Array<{safeName:string, originalname:string}>>}
  */
-async function saveImageFiles(tx, materialId, files, savedFiles) {
-  if (!files.length) return;
-
-  const currentCount = await tx.materialImage.count({
-    where: { material_id: materialId },
-  });
-
-  const imageRecords = [];
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const ext = path.extname(file.filename).toLowerCase();
-    const safeName = `${Date.now()}_${crypto.randomUUID()}${ext}`;
-    const filePath = path.join(UPLOAD_DIR, safeName);
-
-    await fs.promises.writeFile(filePath, file.buffer);
-    savedFiles.push(safeName);
-
-    imageRecords.push({
-      material_id: materialId,
-      file_url: `/uploads/${safeName}`,
-      file_name: safeName,
-      org_name: file.originalname || file.filename,
-      sort: currentCount + i,
-    });
+async function writeUploadsToDisk(files) {
+  const prepared = [];
+  try {
+    for (const file of files) {
+      const ext = path.extname(file.filename).toLowerCase();
+      const safeName = `${Date.now()}_${crypto.randomUUID()}${ext}`;
+      const filePath = path.join(UPLOAD_DIR, safeName);
+      await fs.promises.writeFile(filePath, file.buffer);
+      prepared.push({
+        safeName,
+        originalname: file.originalname || file.filename,
+      });
+    }
+    return prepared;
+  } catch (err) {
+    // 중간 실패: 지금까지 쓴 파일은 즉시 정리
+    for (const p of prepared) {
+      await unlinkIfExists(path.join(UPLOAD_DIR, p.safeName));
+    }
+    throw err;
   }
-
-  await tx.materialImage.createMany({ data: imageRecords });
 }
 
 /**
- * 지정된 MaterialImage ID 목록을 디스크 + DB 에서 삭제.
- * @param {Prisma.TransactionClient} tx
- * @param {number} materialId
- * @param {number[]} deleteImageIds
+ * 디스크에 이미 쓰여진 파일 정보를 토대로 MaterialImage 레코드를 일괄 생성.
+ * 트랜잭션 내부 DB 전용 연산.
  */
-async function deleteSelectedImages(tx, materialId, deleteImageIds) {
-  if (!deleteImageIds.length) return;
+async function insertImageRecords(tx, materialId, prepared) {
+  if (!prepared.length) return;
+  const currentCount = await tx.materialImage.count({
+    where: { material_id: materialId },
+  });
+  await tx.materialImage.createMany({
+    data: prepared.map((p, i) => ({
+      material_id: materialId,
+      file_url: `/uploads/${p.safeName}`,
+      file_name: p.safeName,
+      org_name: p.originalname,
+      sort: currentCount + i,
+    })),
+  });
+}
+
+/**
+ * 지정된 MaterialImage ID 목록을 DB 에서만 삭제하고, 디스크 파일 경로는
+ * 반환만 한다(호출자가 커밋 후 삭제). 트랜잭션 내부에서 디스크 unlink 를
+ * 하면 이후 tx 단계 실패 시 파일은 돌아오지 않으므로 분리 필수.
+ */
+async function removeImageRecordsAndCollectPaths(tx, materialId, deleteImageIds) {
+  if (!deleteImageIds.length) return [];
 
   const imagesToDelete = await tx.materialImage.findMany({
     where: { id: { in: deleteImageIds }, material_id: materialId },
   });
 
-  for (const img of imagesToDelete) {
-    await unlinkIfExists(toUploadPath(img.file_url));
-  }
-
   await tx.materialImage.deleteMany({
     where: { id: { in: deleteImageIds }, material_id: materialId },
   });
+
+  return imagesToDelete.map((img) => toUploadPath(img.file_url));
 }
 
 export default {
@@ -402,8 +415,10 @@ export default {
   /**
    * 자재 생성/수정 트랜잭션
    * - id 없으면 생성(code 중복 체크), 있으면 수정 + deleteImageIds 처리
-   * - 알림 생성, 이미지 파일 저장, 태그 재동기화 모두 트랜잭션 내 수행
-   * - 트랜잭션 실패 시 이미 디스크에 저장된 이미지 파일 롤백
+   * - 디스크 I/O 와 DB 트랜잭션을 분리해 불일치를 방지한다:
+   *   1) 신규 업로드는 tx 전에 디스크 기록 → tx 실패 시 cleanup
+   *   2) 삭제 대상은 tx 내부에서 DB row 만 제거하고 파일 경로 수집 →
+   *      커밋 성공 후 디스크 unlink (unlink 실패해도 DB 는 이미 일관)
    * @param {Object} data { id, code, name, ..., deleteImageIds, tag_ids }
    * @param {Array} files 업로드 파일 배열
    * @param {Object} user 로그인 사용자
@@ -411,14 +426,18 @@ export default {
   async save(data, files = [], user) {
     await fs.promises.mkdir(UPLOAD_DIR, { recursive: true });
 
-    const savedFiles = [];
     const { id, deleteImageIds = [], tag_ids, ...fields } = data;
     const tagIds = Array.isArray(tag_ids) ? tag_ids : undefined;
     const isCreate = !id || id === 0;
 
+    // 1) 트랜잭션 전에 업로드 파일을 디스크에 선기록
+    const prepared = await writeUploadsToDisk(files);
+
+    let post;
+    let filesToUnlinkAfterCommit = [];
     try {
-      return await prisma.$transaction(async (tx) => {
-        let post;
+      post = await prisma.$transaction(async (tx) => {
+        let innerPost;
         let oldPrices = null;
 
         if (isCreate) {
@@ -429,7 +448,7 @@ export default {
             throw new Error("이미 존재하는 자재 코드입니다.");
           }
 
-          post = await tx.material.create({ data: fields });
+          innerPost = await tx.material.create({ data: fields });
         } else {
           const existing = await tx.material.findUnique({ where: { id } });
           if (!existing) {
@@ -438,39 +457,56 @@ export default {
 
           oldPrices = pickPrices(existing);
 
-          post = await tx.material.update({
+          innerPost = await tx.material.update({
             where: { id },
             data: fields,
           });
 
-          await deleteSelectedImages(tx, post.id, deleteImageIds);
+          // DB row 만 삭제하고 디스크 파일 경로는 커밋 후 삭제용으로 수집
+          filesToUnlinkAfterCommit = await removeImageRecordsAndCollectPaths(
+            tx,
+            innerPost.id,
+            deleteImageIds,
+          );
         }
 
-        await createNotification(tx, user, post, isCreate);
-        await saveImageFiles(tx, post.id, files, savedFiles);
+        await createNotification(tx, user, innerPost, isCreate);
+        await insertImageRecords(tx, innerPost.id, prepared);
 
         if (tagIds !== undefined) {
-          await syncMaterialTags(tx, post.id, tagIds);
+          await syncMaterialTags(tx, innerPost.id, tagIds);
         }
 
         // 가격 이력 기록
         // - CREATE: 항상 스냅샷 1행 저장
         // - UPDATE: 6개 가격 중 하나라도 변경됐을 때만 저장
-        const newPrices = pickPrices(post);
+        const newPrices = pickPrices(innerPost);
         if (isCreate) {
-          await insertPriceHistory(tx, post.id, newPrices, "CREATE", user?.id ?? null);
+          await insertPriceHistory(tx, innerPost.id, newPrices, "CREATE", user?.id ?? null);
         } else if (pricesDiffer(oldPrices, newPrices)) {
-          await insertPriceHistory(tx, post.id, newPrices, "UPDATE", user?.id ?? null);
+          await insertPriceHistory(tx, innerPost.id, newPrices, "UPDATE", user?.id ?? null);
         }
 
-        return post;
+        return innerPost;
       });
     } catch (err) {
-      // DB 실패 시 파일 롤백
-      for (const filename of savedFiles) {
-        await unlinkIfExists(path.join(UPLOAD_DIR, filename));
+      // 트랜잭션 실패 → 선기록한 업로드 파일 정리 (삭제 대상은 아직 디스크에 있으므로 건드리지 않음)
+      for (const p of prepared) {
+        await unlinkIfExists(path.join(UPLOAD_DIR, p.safeName));
       }
       throw err;
     }
+
+    // 2) 커밋 성공 후 삭제 대상 디스크 파일 정리
+    //    unlink 실패 시에도 DB 는 이미 일관 — 로그만 남기고 진행 (orphan 은 별도 스윕 대상)
+    for (const fp of filesToUnlinkAfterCommit) {
+      try {
+        await unlinkIfExists(fp);
+      } catch (e) {
+        console.error("[material.save] orphan file unlink failed:", fp, e);
+      }
+    }
+
+    return post;
   },
 };

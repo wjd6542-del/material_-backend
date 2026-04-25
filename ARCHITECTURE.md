@@ -1,8 +1,19 @@
 # 자재관리 서버 (material-server) 아키텍처 & 모델 설계 분석
 
-> 작성일: 2026-04-18 (최종 갱신: 2026-04-22)
+> 작성일: 2026-04-18 (최종 갱신: 2026-04-24)
 > 대상 커밋: `main` @ f766372 기준
-> 추가 반영: Business · PurchaseOrder · Chat(Socket.IO) · Supplier 주소 확장 · 메시지 soft delete
+> 추가 반영:
+> - Business · PurchaseOrder · Chat(Socket.IO) · Supplier 주소 확장 · 메시지 soft delete
+> - **Material 가격 6종 + 요율 5종** 필드 + `MaterialPriceHistory` (스냅샷)
+> - **MaterialRate** 싱글톤 + `MaterialRateHistory` (FK 연결)
+> - **Supplier 확장**: `type`(INBOUND/OUTBOUND)·`receivable`/`payable`·`registration_no`/`mobile`/`fax`/`account_no`
+> - **SupplierHistory** (거래처 type·금액 변경 스냅샷)
+> - **Inbound 확장**: `supplier_id`·`purchase_date`·`vat_applied`·`is_unpaid`
+> - **InboundItem**: `unit_price→price`, `amount→supply_amount` 리네임 + `vat` 추가
+> - **재고 로직 보강**: 이동평균 단가 계산, `stock_value` 자동 동기, shelf_id 포함 4컬럼 unique
+> - **거래처 미지급금 자동 반영**: 입고 저장/삭제 시 `supplier.payable` delta + `SupplierHistory` 기록
+> - **권한 전면 매핑**: 프론트 권한 트리 기반 모든 라우트에 `permission()` preHandler 적용
+>
 > 범위: `/server` 전체 + `/prisma/schema.prisma`
 
 ---
@@ -162,12 +173,13 @@ deleteById(id), batchDelete(rows), batchSave(rows), save(row, tx?)
 | 영역 | 모델 |
 | --- | --- |
 | 계정·권한 | `Role`, `User`, `UserIpWhitelist`, `Permission`, `RolePermission` |
-| 자재 | `MaterialCategory`, `Material`, `MaterialImage`, `Tag`, `MaterialTag` |
-| 공급업체 | `Supplier` (zipcode·address·address_detail 포함) |
+| 자재 | `MaterialCategory`, `Material` (가격 6 + 요율 5), `MaterialImage`, `Tag`, `MaterialTag` |
+| 자재 가격·요율 이력 | `MaterialPriceHistory` (자재별 스냅샷), `MaterialRate` (싱글톤) / `MaterialRateHistory` |
+| 공급업체/거래처 | `Supplier` (type·금액·사업자번호·계좌·주소 등 확장), `SupplierHistory` (enum `SupplierType`) |
 | 사업자 | `Business` |
 | 물리적 위치 | `Warehouse` → `Location` → `Shelf` |
-| 재고 & 이력 | `Stock`, `StockHistory` |
-| 거래 전표 | `Inbound/InboundItem`, `Outbound/OutboundItem`, `ReturnOrder/ReturnOrderItem` |
+| 재고 & 이력 | `Stock` (avg_cost·stock_value 동기), `StockHistory` |
+| 거래 전표 | `Inbound/InboundItem` (거래처·구매일·부가세·미수금), `Outbound/OutboundItem`, `ReturnOrder/ReturnOrderItem` |
 | 발주 | `PurchaseOrder/PurchaseOrderItem` (enum `PurchaseOrderStatus`) |
 | 채팅 | `ChatRoom`, `ChatRoomMember`, `ChatMessage` (enum `ChatRoomType`) |
 | 파일·감사·알림 | `Attachment`, `AuditLog`, `Notification` |
@@ -236,7 +248,11 @@ model Stock {
 ```
 Inbound            InboundItem         (N개 라인)
   - inbound_no       - material / warehouse / location / shelf
-  - user_id          - quantity / unit_price / amount
+  - supplier_id      - supplier_id (선택, 라인 단위)
+  - purchase_date    - quantity / price / supply_amount / vat
+  - vat_applied
+  - is_unpaid        (* PurchaseOrderItem 필드명 일치: price / supply_amount / vat)
+  - user_id
 
 Outbound           OutboundItem
   - outbound_no      - sale_price / sale_amount
@@ -246,9 +262,18 @@ ReturnOrder        ReturnOrderItem
   - return_no        - sale_price / cost_price / profit
   - status (enum)    - reasonType / stockStatus
   - totalAmount
+
+PurchaseOrder      PurchaseOrderItem
+  - order_no         - price / supply_amount / vat
+  - supplier_id      - supplier_id (헤더와 동일, 비정규화)
+  - order_date       - memo
+  - delivery_date
+  - status · vat_applied
 ```
 
 **특이점**:
+- **Inbound ↔ PurchaseOrder 패턴 정렬**: 둘 다 `supplier_id`, `vat_applied` 를 헤더에 가짐. 라인 단가 필드명도 `price/supply_amount/vat` 로 통일 (과거 `unit_price/amount` 에서 리네임)
+- Inbound 는 `is_unpaid` (미수금 여부)로 지급 상태를 추적 (기본 true=미지급)
 - OutboundItem 에 `cost_price` / `profit` 이 저장되어 **출고 시점에 원가가 고정**됨 (이후 입고로 이동평균이 바뀌어도 이미 팔린 건은 흔들리지 않음 = 재무 재현성)
 - ReturnOrderItem 은 `reasonType`, `stockStatus`(READY/DONE) 로 **반품 프로세스 상태 + 재고 반영 여부** 를 분리 추적
 - ReturnOrder 만 `status` enum(REQUESTED/INSPECTING/COMPLETED/REJECTED) 을 가지며, COMPLETED 전이 시 재고를 +로 반영
@@ -380,35 +405,122 @@ ChatMessage
 - 소켓을 병행한 이유: 실시간성 요구(타이핑감, 즉시 반영)가 polling 으로 커버 불가
 - Soft delete 이유: 감사성·복구 가능성 + "삭제된 메시지입니다" 플레이스홀더로 대화 흐름 보존
 
+### 5.11 자재 가격·요율 관리
+
+자재 단위 가격과 전사 공통 요율 프리셋을 분리 운영한다.
+
+```
+Material (자재별 값 저장)
+├─ 가격 6종:  inbound_price, outbound_price1/2, wholesale_price1/2, online_price
+└─ 요율 5종:  outbound_rate1/2, wholesale_rate1/2, online_rate
+       │
+       ▼
+MaterialPriceHistory
+  - 가격·요율 11개 컬럼 스냅샷 + action(CREATE|UPDATE) + changed_by + reason
+  - CREATE 시 항상 기록, UPDATE 는 11개 중 하나라도 변경되면 기록
+
+MaterialRate (싱글톤, 프론트 프리셋 전용)
+  - 요율 5종 (Material 의 rate 컬럼명과 동일)
+  - updated_by
+       │ 1:N (FK: rate_id)
+       ▼
+MaterialRateHistory
+  - 요율 5종 스냅샷, 값 1개라도 변경 시 기록
+```
+
+- **용도 분리**: `MaterialRate` 는 자재 등록 화면의 초기값 제공용, 실제 계산에 쓰이는 값은 `Material.*_rate`
+- **필드명 일치**: `MaterialRate` 의 요율 컬럼명을 Material 과 동일하게 맞춰 프론트에서 그대로 바인딩 가능
+- **엔드포인트**: `/api/material/priceHistory`, `/api/materialRate/info|save|history`
+
+### 5.12 거래처(Supplier) 확장 + 이력
+
+거래처는 단순 마스터에서 **구매/판매 구분 + 금액 관리 + 변경 이력**을 갖춘 모델로 확장됨.
+
+```
+Supplier
+├─ 기본: name, type (INBOUND|OUTBOUND), registration_no, phone, mobile, fax,
+│        email, account_no, zipcode, address, address_detail, memo, sort
+├─ 금액: receivable(미수금), payable(미지급금)   ← Decimal(18,2)
+└─ 관계: inbounds, inbound_items, outbound_items, purchase_orders,
+         purchase_order_items, histories
+
+SupplierHistory (FK supplier_id, onDelete: Cascade)
+  - type + receivable + payable + action(CREATE|UPDATE) + updated_by + reason
+  - Supplier 의 type·receivable·payable 중 하나라도 변경 시 스냅샷 기록
+```
+
+- **enum `SupplierType`**: `INBOUND`(구매=공급업체) / `OUTBOUND`(판매=고객사)
+- **자동 이력**: `supplier.service.save` 가 변경 감지하여 `SupplierHistory` 생성
+- **미지급금 자동 반영**: `inbound.service` 가 저장/삭제 시 `Supplier.payable` delta 적용 (§6.5 참조)
+- **엔드포인트**: `/api/supplier/history`
+
 ---
 
 ## 6. 대표 트랜잭션 흐름
 
 ### 6.1 입고 저장 (`inbound.service.save`)
 ```
-1. Inbound 생성(또는 수정)
+1. Inbound 헤더 생성/수정 (supplier_id, purchase_date, vat_applied, is_unpaid 포함)
 2. Notification(INBOUND) 생성
 3. items 루프:
-   - 기존 item 이면 updateStock(-old_qty) 로 원복 → InboundItem update → updateStock(+new_qty)
+   - 기존 item 이면 updateStock(-old_qty) 로 원복 → InboundItem update (price/supply_amount/vat) → updateStock(+new_qty)
    - 신규 item 이면 InboundItem create → updateStock(+qty)
 4. 요청에 없는 기존 item 은 InboundItem 삭제 + updateStock(-qty)
+5. 거래처 미지급금 반영: 이전/신규 items 를 supplier_id 별 집계 → delta 계산
+   → applySupplierPayableDelta(tx, deltaMap) 으로 Supplier.payable 증감 + SupplierHistory 1행씩 기록
    → updateStock 은 Stock.upsert + StockHistory(INBOUND/OUTBOUND) 원샷
+     + 이동평균 avg_cost · stock_value 자동 재계산 (§6.6)
 ```
 
 ### 6.2 출고 저장 (`outbound.service.save`)
 - 입고와 구조 동일하나, 저장 시점에 **Stock.avg_cost 를 읽어 cost_price 를 고정**하고 `sale_amount - cost_amount = profit` 계산
 - 재고 부족 시 AppError 던져 트랜잭션 롤백
+- stock_value 를 새 수량 기준으로 재계산 (avg_cost 는 유지)
 
 ### 6.3 재고 이동 (`stock.service.transfer`)
 - from/to Location 을 통해 warehouse_id 파생 → 동일 창고 내 이동이 아니어도 동작
-- 출발지 차감 + 도착지 증가 (도착지 Stock 없으면 새로 생성)
-- StockHistory 에 `TRANSFER_OUT` + `TRANSFER_IN` 두 건을 짝으로 기록
+- 출발지 차감 + 도착지 증가 (도착지 Stock 없으면 새로 생성, 출발지 `shelf_id` 그대로 보존)
+- **이동평균 병합**: 도착지에 기존 재고 있으면 단가 가중평균 재계산
+- StockHistory 에 `TRANSFER_OUT`(-qty) + `TRANSFER_IN`(+qty) 두 건을 짝으로 기록 (shelf_id / unit_cost / amount 포함)
 - STOCK 타입 알림 생성
 
 ### 6.4 반품 완료 (`returnorder.service.save` → status=COMPLETED)
 - 각 item 의 창고/위치/선반에 +수량으로 Stock upsert + StockHistory(RETURNORDER)
 - `stockStatus`=DONE 으로 재고 반영 완료 표시
 - 삭제 시 COMPLETED 였으면 -수량으로 원복
+- avg_cost 는 유지 (신규 셀은 `item.cost_price` 로 초기화), stock_value 재계산
+
+### 6.5 거래처 미지급금 자동 반영 (`applySupplierPayableDelta`)
+
+입고 저장/삭제 트랜잭션 내부에서 실행되는 `inbound.service` 의 헬퍼:
+
+```
+1. aggregateSupplierAmounts(oldItems) / aggregateSupplierAmounts(newItems)
+   → 각 supplier_id 별 supply_amount 합계 Map 생성 (supplier_id 없는 item 은 제외)
+2. supplier 별 delta = new - old 계산
+3. delta != 0 인 supplier 에 대해:
+   - Supplier.payable 을 { increment: delta } 로 갱신
+   - SupplierHistory 1행 기록 (action=UPDATE, reason="입고 {no} 반영 (+/-)")
+```
+
+- **입고 삭제 시**: 모든 item 의 supply_amount 를 음수 delta 로 적용 (payable 차감)
+- **수정 시**: 기존 items 와 신규 items 의 합계 차이만큼 정확히 ±
+- **supplier 교체**: 같은 item 이 A→B 로 바뀌면 A -amount, B +amount 각각 기록
+
+### 6.6 재고 금액 동기 (`avg_cost` / `stock_value`)
+
+모든 재고 증감 연산에서 함께 관리되는 회계 지표:
+
+| 연산 | avg_cost | stock_value |
+| --- | --- | --- |
+| 입고(+) | 이동평균 재계산 `(oldQty*oldAvg + inQty*inPrice) / newQty` | `newQty * newAvg` |
+| 입고 롤백/출고(−) | 유지 | `newQty * avg_cost` |
+| 반품(+) | 유지 (0 이었으면 `item.cost_price` 로 초기화) | `newQty * avg_cost` |
+| Transfer IN | 도착지 기준 이동평균 병합 | `newQty * mergedAvg` |
+| Transfer OUT | 유지 | `newQty * avg_cost` |
+| 재고 0 소진 | 0 으로 초기화 | 0 |
+
+이전에는 avg_cost 가 0 으로 고정돼 출고 원가·이익이 모두 0 으로 저장되던 버그를 해결한 핵심 변경 지점.
 
 ---
 
