@@ -83,7 +83,7 @@ export default async function returnorderRoutes(app) {
     { preHandler: permission("returnorder.delete") },
     async (req) => {
       const params = validate(idParamSchema, req.body);
-      return returnorderService.deleteById(params.id);
+      return returnorderService.deleteById(params.id, req.user);
     },
   );
 
@@ -104,7 +104,7 @@ export default async function returnorderRoutes(app) {
     { preHandler: permission("returnorder.delete") },
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
-      return returnorderService.batchDelete(body);
+      return returnorderService.batchDelete(body, req.user);
     },
   );
 }

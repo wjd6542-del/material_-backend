@@ -43,7 +43,7 @@ export default {
       },
     });
     if (!item) {
-      throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
+      throw new AppError("존재하지 않는 역할 입니다.", 404, "NOT_FOUND");
     }
     return item;
   },

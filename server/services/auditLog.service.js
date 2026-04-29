@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
+import { buildDateRange } from "../utils/dateRange.js";
 
 export default {
   /**
@@ -25,11 +26,9 @@ export default {
     }
 
     // 날짜 검색
-    if (data.startDate && data.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.created_at = range;
     }
 
     const actoin_check = [

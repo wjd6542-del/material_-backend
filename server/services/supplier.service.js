@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
+import userService from "./user.service.js";
 
 /** 이력으로 추적하는 Supplier 필드 (type / 금액) */
 const TRACK_FIELDS = ["type", "receivable", "payable"];
@@ -78,15 +79,22 @@ export default {
 
     const item = await prisma.supplier.findUnique({ where: { id } });
     if (!item) {
-      throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
+      throw new AppError("존재하지 않는 거래처 입니다.", 404, "NOT_FOUND");
     }
     return item;
   },
 
-  /** 공급업체 단건 삭제 */
+  /** 공급업체 단건 삭제 (cascade 로 history/items 정리, 트랜잭션 보장) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
-    return prisma.supplier.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const exists = await tx.supplier.findUnique({ where: { id } });
+      if (!exists) {
+        throw new AppError("존재하지 않는 거래처 입니다.", 404, "NOT_FOUND");
+      }
+      await tx.supplier.delete({ where: { id } });
+      return true;
+    });
   },
 
   /**
@@ -211,17 +219,7 @@ export default {
       take: limit,
     });
 
-    const userIds = [
-      ...new Set(rows.map((r) => r.updated_by).filter((v) => v != null)),
-    ];
-
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, username: true },
-        })
-      : [];
-    const userMap = new Map(users.map((u) => [u.id, u]));
+    const userMap = await userService.getMapByIds(rows.map((r) => r.updated_by));
 
     return rows.map((r) => ({
       ...r,

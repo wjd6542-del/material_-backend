@@ -1,23 +1,11 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { parsePage } from "../utils/pagination.js";
+import { buildDateRange } from "../utils/dateRange.js";
+import userService from "./user.service.js";
 
 export default {
-  /**
-   * created_by / updated_by 에 해당하는 User 정보를 조회해 Map 으로 반환
-   * @param {Array<number|null|undefined>} ids
-   * @returns {Promise<Map<number, {id:number,name:string,username:string}>>}
-   */
-  async getUserMap(ids) {
-    const uniq = [...new Set(ids.filter((v) => v != null))];
-    if (!uniq.length) return new Map();
-
-    const users = await prisma.user.findMany({
-      where: { id: { in: uniq } },
-      select: { id: true, name: true, username: true },
-    });
-    return new Map(users.map((u) => [u.id, u]));
-  },
 
   /**
    * 발주 전표 리스트 (order_no 검색, 기간·상태·거래처 필터)
@@ -38,28 +26,19 @@ export default {
       where.supplier_id = Number(data.supplier_id);
     }
 
-    // 생성일 기준
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
-
-    // 발주일자
-    if (data?.orderStartDate && data?.orderEndDate) {
-      where.order_date = {
-        gte: new Date(data.orderStartDate),
-        lte: new Date(data.orderEndDate),
-      };
-    }
-
-    // 납기일자
-    if (data?.deliveryStartDate && data?.deliveryEndDate) {
-      where.delivery_date = {
-        gte: new Date(data.deliveryStartDate),
-        lte: new Date(data.deliveryEndDate),
-      };
+    {
+      const created = buildDateRange(data?.startDate, data?.endDate);
+      if (created) where.created_at = created;
+      const ordered = buildDateRange(
+        data?.orderStartDate,
+        data?.orderEndDate,
+      );
+      if (ordered) where.order_date = ordered;
+      const delivered = buildDateRange(
+        data?.deliveryStartDate,
+        data?.deliveryEndDate,
+      );
+      if (delivered) where.delivery_date = delivered;
     }
 
     const rows = await prisma.purchaseOrder.findMany({
@@ -75,7 +54,7 @@ export default {
       orderBy: { created_at: "desc" },
     });
 
-    const userMap = await this.getUserMap(
+    const userMap = await userService.getMapByIds(
       rows.flatMap((r) => [r.created_by, r.updated_by]),
     );
 
@@ -110,28 +89,22 @@ export default {
     if (data?.status) where.status = data.status;
     if (data?.supplier_id) where.supplier_id = Number(data.supplier_id);
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
-    if (data?.orderStartDate && data?.orderEndDate) {
-      where.order_date = {
-        gte: new Date(data.orderStartDate),
-        lte: new Date(data.orderEndDate),
-      };
-    }
-    if (data?.deliveryStartDate && data?.deliveryEndDate) {
-      where.delivery_date = {
-        gte: new Date(data.deliveryStartDate),
-        lte: new Date(data.deliveryEndDate),
-      };
+    {
+      const created = buildDateRange(data?.startDate, data?.endDate);
+      if (created) where.created_at = created;
+      const ordered = buildDateRange(
+        data?.orderStartDate,
+        data?.orderEndDate,
+      );
+      if (ordered) where.order_date = ordered;
+      const delivered = buildDateRange(
+        data?.deliveryStartDate,
+        data?.deliveryEndDate,
+      );
+      if (delivered) where.delivery_date = delivered;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.purchaseOrder.findMany({
@@ -147,7 +120,7 @@ export default {
       prisma.purchaseOrder.count({ where }),
     ]);
 
-    const userMap = await this.getUserMap(
+    const userMap = await userService.getMapByIds(
       rows.flatMap((r) => [r.created_by, r.updated_by]),
     );
 
@@ -204,25 +177,19 @@ export default {
       poWhere.order_no = { contains: data.order_no };
     }
 
-    if (data.startDate && data.endDate) {
-      poWhere.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
-
-    if (data.orderStartDate && data.orderEndDate) {
-      poWhere.order_date = {
-        gte: new Date(data.orderStartDate),
-        lte: new Date(data.orderEndDate),
-      };
-    }
-
-    if (data.deliveryStartDate && data.deliveryEndDate) {
-      poWhere.delivery_date = {
-        gte: new Date(data.deliveryStartDate),
-        lte: new Date(data.deliveryEndDate),
-      };
+    {
+      const created = buildDateRange(data.startDate, data.endDate);
+      if (created) poWhere.created_at = created;
+      const ordered = buildDateRange(
+        data.orderStartDate,
+        data.orderEndDate,
+      );
+      if (ordered) poWhere.order_date = ordered;
+      const delivered = buildDateRange(
+        data.deliveryStartDate,
+        data.deliveryEndDate,
+      );
+      if (delivered) poWhere.delivery_date = delivered;
     }
 
     if (Object.keys(poWhere).length) {
@@ -241,7 +208,7 @@ export default {
       },
     });
 
-    const userMap = await this.getUserMap(
+    const userMap = await userService.getMapByIds(
       rows.flatMap((r) => [
         r.purchaseOrder?.created_by,
         r.purchaseOrder?.updated_by,
@@ -288,31 +255,25 @@ export default {
     const poWhere = {};
     if (data.status) poWhere.status = data.status;
     if (data.order_no) poWhere.order_no = { contains: data.order_no };
-    if (data.startDate && data.endDate) {
-      poWhere.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
-    }
-    if (data.orderStartDate && data.orderEndDate) {
-      poWhere.order_date = {
-        gte: new Date(data.orderStartDate),
-        lte: new Date(data.orderEndDate),
-      };
-    }
-    if (data.deliveryStartDate && data.deliveryEndDate) {
-      poWhere.delivery_date = {
-        gte: new Date(data.deliveryStartDate),
-        lte: new Date(data.deliveryEndDate),
-      };
+    {
+      const created = buildDateRange(data.startDate, data.endDate);
+      if (created) poWhere.created_at = created;
+      const ordered = buildDateRange(
+        data.orderStartDate,
+        data.orderEndDate,
+      );
+      if (ordered) poWhere.order_date = ordered;
+      const delivered = buildDateRange(
+        data.deliveryStartDate,
+        data.deliveryEndDate,
+      );
+      if (delivered) poWhere.delivery_date = delivered;
     }
     if (Object.keys(poWhere).length) {
       where.purchaseOrder = poWhere;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.purchaseOrderItem.findMany({
@@ -331,7 +292,7 @@ export default {
       prisma.purchaseOrderItem.count({ where }),
     ]);
 
-    const userMap = await this.getUserMap(
+    const userMap = await userService.getMapByIds(
       rows.flatMap((r) => [
         r.purchaseOrder?.created_by,
         r.purchaseOrder?.updated_by,
@@ -392,7 +353,7 @@ export default {
       throw new AppError("존재하지 않는 데이터 입니다.", 404, "NOT_FOUND");
     }
 
-    const userMap = await this.getUserMap([item.created_by, item.updated_by]);
+    const userMap = await userService.getMapByIds([item.created_by, item.updated_by]);
 
     return {
       ...item,
@@ -435,13 +396,15 @@ export default {
    * 발주 전표 단건 삭제 (cascade 로 items 정리)
    */
   async deleteById(id) {
-    const po = await prisma.purchaseOrder.findUnique({ where: { id } });
-    if (!po) {
-      throw new AppError("발주 전표가 없습니다.", 404, "NOT_FOUND");
-    }
+    return prisma.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.findUnique({ where: { id } });
+      if (!po) {
+        throw new AppError("발주 전표가 없습니다.", 404, "NOT_FOUND");
+      }
 
-    await prisma.purchaseOrder.delete({ where: { id } });
-    return true;
+      await tx.purchaseOrder.delete({ where: { id } });
+      return true;
+    });
   },
 
   /**
@@ -483,7 +446,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "PURCHASEORDER",
@@ -517,7 +480,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "PURCHASEORDER",

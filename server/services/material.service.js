@@ -4,6 +4,9 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { generateQR } from "../utils/qrcode.js";
+import { buildDateRange } from "../utils/dateRange.js";
+import { parsePage } from "../utils/pagination.js";
+import userService from "./user.service.js";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 const MATERIAL_INCLUDE = {
@@ -191,6 +194,27 @@ async function removeImageRecordsAndCollectPaths(tx, materialId, deleteImageIds)
 
 export default {
   /**
+   * 검색어(품목명·코드 부분일치)로 매칭되는 Material id 배열 반환.
+   * 여러 서비스(stock/outbound 등)에서 "검색어 → 품목 id 목록 → IN 절" 패턴을
+   * 반복하던 것을 단일화한 헬퍼.
+   * @param {string} text
+   * @returns {Promise<number[]>}
+   */
+  async searchIds(text) {
+    if (!text) return [];
+    const rows = await prisma.material.findMany({
+      where: {
+        OR: [
+          { code: { contains: text } },
+          { name: { contains: text } },
+        ],
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
    * 이번 달 1일 00:00 ~ 다음 달 1일 범위로 생성된 품목 리스트 (대시보드용)
    * @param {{limit?:number}} data
    * @returns {Promise<Array<{id:number,name:string,code:string,created_at:Date}>>}
@@ -239,15 +263,7 @@ export default {
       take: limit,
     });
 
-    const userIds = [...new Set(rows.map((r) => r.changed_by).filter((v) => v != null))];
-
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, username: true },
-        })
-      : [];
-    const userMap = new Map(users.map((u) => [u.id, u]));
+    const userMap = await userService.getMapByIds(rows.map((r) => r.changed_by));
 
     return rows.map((r) => ({
       ...r,
@@ -270,11 +286,9 @@ export default {
       where.name = { contains: data.keyword };
     }
 
-    if (data.startDate && data.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.created_at = range;
     }
 
     return prisma.material.findMany({
@@ -286,6 +300,43 @@ export default {
       skip,
       take: limit,
     });
+  },
+
+  /**
+   * 품목 페이지네이션 리스트 — 다른 서비스와 통일된 {rows,total,page,limit,totalPages}
+   * 형태로 반환. 기존 getPageList 는 단순 배열을 반환해 응답 형태가 다르므로 호환을 위해 분리.
+   * @param {{page?:number,limit?:number,keyword?:string,startDate?:string,endDate?:string}} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getPagedList(data) {
+    const where = {};
+    if (data?.keyword) where.name = { contains: data.keyword };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
+    }
+
+    const { page, limit, skip } = parsePage(data);
+    const [rows, total] = await Promise.all([
+      prisma.material.findMany({
+        where,
+        orderBy: { id: "desc" },
+        include: {
+          images: { orderBy: { sort: "asc" } },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.material.count({ where }),
+    ]);
+
+    return {
+      rows,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   /**
@@ -316,11 +367,9 @@ export default {
       ];
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.updated_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.updated_at = range;
     }
 
     if (data?.tag_ids?.length) {
@@ -445,14 +494,22 @@ export default {
             where: { code: fields.code },
           });
           if (exist) {
-            throw new Error("이미 존재하는 품목 코드입니다.");
+            throw new AppError(
+              "이미 존재하는 품목 코드입니다.",
+              400,
+              "DUPLICATE_CODE",
+            );
           }
 
           innerPost = await tx.material.create({ data: fields });
         } else {
           const existing = await tx.material.findUnique({ where: { id } });
           if (!existing) {
-            throw new Error("게시글이 존재하지 않습니다.");
+            throw new AppError(
+              "품목이 존재하지 않습니다.",
+              404,
+              "NOT_FOUND",
+            );
           }
 
           oldPrices = pickPrices(existing);

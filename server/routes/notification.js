@@ -1,9 +1,14 @@
 import notificationService from "../services/notification.service.js";
+import { validate } from "../plugins/validator.plugin.js";
+import {
+  idParamSchema,
+  batchIdsSchema,
+} from "../validators/notification.schema.js";
 import { permission } from "../middleware/permission.js";
 
 /**
  * 알림(Notification) 라우트 (/api/notification/*)
- * 사용자별 알림 조회·읽음·삭제 처리
+ * 사용자별 알림 조회·읽음·삭제 처리. 변경 라우트는 본인 소유 알림만 처리.
  */
 export default async function notificationRoutes(app) {
   /** 알림 리스트 @route POST /api/notification/list */
@@ -20,7 +25,8 @@ export default async function notificationRoutes(app) {
     "/read",
     { preHandler: permission("notification.read") },
     async (req) => {
-      return notificationService.read(req.body, req.user);
+      const body = validate(idParamSchema, req.body);
+      return notificationService.read(body, req.user);
     },
   );
 
@@ -56,7 +62,8 @@ export default async function notificationRoutes(app) {
     "/batchDelete",
     { preHandler: permission("notification.delete") },
     async (req) => {
-      return notificationService.batchDelete(req.body, req.user);
+      const body = validate(batchIdsSchema, req.body);
+      return notificationService.batchDelete(body, req.user);
     },
   );
 
@@ -65,7 +72,8 @@ export default async function notificationRoutes(app) {
     "/batchRead",
     { preHandler: permission("notification.read") },
     async (req) => {
-      return notificationService.batchRead(req.body, req.user);
+      const body = validate(batchIdsSchema, req.body);
+      return notificationService.batchRead(body, req.user);
     },
   );
 }

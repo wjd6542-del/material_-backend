@@ -1,6 +1,8 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { parsePage } from "../utils/pagination.js";
+import { buildDateRange } from "../utils/dateRange.js";
 import { ensureAndLockStock } from "./stock.lock.js";
 
 /**
@@ -79,11 +81,9 @@ export default {
       };
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
     const rows = await prisma.inbound.findMany({
@@ -119,16 +119,12 @@ export default {
       where.inbound_no = { contains: data.inbound_no };
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.inbound.findMany({
@@ -189,13 +185,9 @@ export default {
       where.supplier_id = data.supplier_id;
     }
 
-    if (data.startDate && data.endDate) {
-      where.inbound = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.inbound = { created_at: range };
     }
 
     const rows = await prisma.inboundItem.findMany({
@@ -243,18 +235,12 @@ export default {
     if (data.location_id) where.location_id = data.location_id;
     if (data.supplier_id) where.supplier_id = data.supplier_id;
 
-    if (data.startDate && data.endDate) {
-      where.inbound = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.inbound = { created_at: range };
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.inboundItem.findMany({
@@ -517,7 +503,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "INBOUND",
@@ -541,7 +527,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "INBOUND",

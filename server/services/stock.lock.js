@@ -7,6 +7,7 @@
  * 반드시 prisma.$transaction 의 인터랙티브 트랜잭션(tx) 안에서 호출해야 하며,
  * 락은 해당 트랜잭션 커밋/롤백 시점까지 유지된다.
  */
+import AppError from "../errors/AppError.js";
 
 /**
  * id 로 Stock 행을 잠그고 최신 값(quantity, avg_cost)을 반환.
@@ -65,7 +66,11 @@ export async function ensureAndLockStock(tx, uniqueKey, userId) {
   const stock = await ensureStockRow(tx, uniqueKey, userId);
   const locked = await lockStockById(tx, stock.id);
   if (!locked) {
-    throw new Error(`Stock 행 잠금 실패 (id=${stock.id})`);
+    throw new AppError(
+      `Stock 행 잠금 실패 (id=${stock.id})`,
+      500,
+      "STOCK_LOCK_FAILED",
+    );
   }
   return locked;
 }

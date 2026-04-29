@@ -154,18 +154,29 @@ export default {
       },
     });
 
+    // 룸별 미읽음 카운트를 N+1 방지를 위해 단일 groupBy 쿼리로 일괄 집계
+    // (각 룸의 last_read_at 가 달라 OR 절로 묶어 한 번에 처리)
+    const unreadConditions = members
+      .map((m) => ({
+        room_id: m.room_id,
+        sender_id: { not: user.id },
+        ...(m.last_read_at ? { created_at: { gt: m.last_read_at } } : {}),
+      }));
+    const unreadCounts = unreadConditions.length
+      ? await prisma.chatMessage.groupBy({
+          by: ["room_id"],
+          where: { OR: unreadConditions },
+          _count: { _all: true },
+        })
+      : [];
+    const unreadMap = new Map(
+      unreadCounts.map((c) => [c.room_id, c._count._all]),
+    );
+
     const rows = await Promise.all(
       members.map(async (m) => {
         const { room, last_read_at } = m;
-
-        // 미읽음 수: 내가 last_read_at 이후 + 내가 보낸 건 제외
-        const unread = await prisma.chatMessage.count({
-          where: {
-            room_id: room.id,
-            sender_id: { not: user.id },
-            created_at: last_read_at ? { gt: last_read_at } : undefined,
-          },
-        });
+        const unread = unreadMap.get(room.id) ?? 0;
 
         // DM 상대 추출
         const peer =

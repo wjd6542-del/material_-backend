@@ -1,6 +1,8 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { parsePage } from "../utils/pagination.js";
+import { buildDateRange } from "../utils/dateRange.js";
 import { ensureAndLockStock } from "./stock.lock.js";
 
 export default {
@@ -89,11 +91,9 @@ export default {
       where.status = data.status;
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
     const rows = await prisma.returnOrder.findMany({
@@ -125,16 +125,12 @@ export default {
     if (data?.return_no) where.return_no = { contains: data.return_no };
     if (data?.status) where.status = data.status;
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.returnOrder.findMany({
@@ -189,13 +185,9 @@ export default {
       where.status = data.status;
     }
 
-    if (data.startDate && data.endDate) {
-      where.returnOrder = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.returnOrder = { created_at: range };
     }
 
     const rows = await prisma.returnOrderItem.findMany({
@@ -242,18 +234,12 @@ export default {
     if (data?.location_id) where.location_id = data.location_id;
     if (data?.status) where.status = data.status;
 
-    if (data.startDate && data.endDate) {
-      where.returnOrder = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.returnOrder = { created_at: range };
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.returnOrderItem.findMany({
@@ -299,7 +285,7 @@ export default {
    * 반품 전표 단건 상세 조회 (items + 창고/품목/위치 포함)
    */
   async getById(id) {
-    if (!id) throw new AppError("ID가 필요합니다.", 400);
+    if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
     const item = await prisma.returnOrder.findUnique({
       where: { id },
@@ -314,7 +300,7 @@ export default {
       },
     });
 
-    if (!item) throw new AppError("존재하지 않는 데이터 입니다.", 404);
+    if (!item) throw new AppError("존재하지 않는 데이터 입니다.", 404, "NOT_FOUND");
     return item;
   },
 
@@ -400,13 +386,28 @@ export default {
     return prisma.$transaction(async (tx) => {
       let returnOrder;
 
+      // 0. 기존 전표(items + status) 사전 조회 — 상태 전이 판단용
+      const oldReturnOrder = data.id
+        ? await tx.returnOrder.findUnique({
+            where: { id: data.id },
+            include: { items: true },
+          })
+        : null;
+      const oldStatusCompleted =
+        oldReturnOrder?.status === "COMPLETED";
+
       // 1. 마스터 정보 생성/수정
       if (!data.id) {
         // 중복 번호 체크
         const exist = await tx.returnOrder.findUnique({
           where: { return_no: data.return_no },
         });
-        if (exist) throw new AppError("이미 존재하는 반품번호입니다.", 400);
+        if (exist)
+          throw new AppError(
+            "이미 존재하는 반품번호입니다.",
+            400,
+            "DUPLICATE_NO",
+          );
 
         returnOrder = await tx.returnOrder.create({
           data: {
@@ -431,66 +432,74 @@ export default {
           },
         });
       }
+      const newStatusCompleted = returnOrder.status === "COMPLETED";
 
-      // 2. 상세 품목 처리 (기존 품목 삭제 후 재등록 방식 또는 비교 방식)
-      // 여기서는 기존 소스의 로직을 유지하여 재고를 역계산 후 재반영합니다.
-      const oldItems = data.id
-        ? await tx.returnOrderItem.findMany({
-            where: { returnOrder_id: returnOrder.id },
-          })
-        : [];
-
-      // 기존 항목 재고 원복 (반품은 재고를 늘렸었으므로 원복 시에는 뺌)
-      for (const oldItem of oldItems) {
-        await this.updateStock(
-          tx,
-          oldItem,
-          -oldItem.quantity,
-          "RETURN_UPDATE_CANCEL",
-          returnOrder.id,
-          user.id,
-        );
-      }
-
-      // 기존 상세 삭제
-      if (data.id) {
-        await tx.returnOrderItem.deleteMany({
-          where: { returnOrder_id: returnOrder.id },
-        });
-      }
-
-      // 새 항목 등록 및 재고 반영
-      for (const item of data.items) {
-        await tx.returnOrderItem.create({
-          data: {
-            returnOrder_id: returnOrder.id,
-            material_id: item.material_id,
-            warehouse_id: item.warehouse_id,
-            location_id: item.location_id,
-            shelf_id: item.shelf_id,
-            quantity: item.quantity,
-            sale_price: item.sale_price,
-            sale_amount: item.quantity * item.sale_price,
-            cost_price: item.cost_price || 0,
-            cost_amount: item.quantity * (item.cost_price || 0),
-            profit: (item.sale_price - (item.cost_price || 0)) * item.quantity,
-            reasonType: item.reasonType || "기타",
-            stockStatus:
-              returnOrder.status === "COMPLETED" ? "RESTOCKED" : "READY",
-          },
-        });
-
-        // 반품 확정 상태라면 재고 증가(+)
-        if (returnOrder.status === "COMPLETED") {
+      // 2. 기존 항목 재고 원복 (이전이 COMPLETED 였을 때만)
+      const oldItems = oldReturnOrder?.items ?? [];
+      if (oldStatusCompleted) {
+        for (const oldItem of oldItems) {
           await this.updateStock(
             tx,
-            item,
+            oldItem,
+            -oldItem.quantity,
+            "RETURN_UPDATE_CANCEL",
+            returnOrder.id,
+            user.id,
+          );
+        }
+      }
+
+      // 3. items 동기화 (keepIds 방식 — id 보존, deleteMany→재생성 패턴 폐기)
+      const oldMap = new Map(oldItems.map((i) => [i.id, i]));
+      const keepIds = [];
+
+      for (const item of data.items) {
+        const itemPayload = {
+          material_id: item.material_id,
+          warehouse_id: item.warehouse_id,
+          location_id: item.location_id,
+          shelf_id: item.shelf_id,
+          quantity: item.quantity,
+          sale_price: item.sale_price,
+          sale_amount: item.quantity * item.sale_price,
+          cost_price: item.cost_price || 0,
+          cost_amount: item.quantity * (item.cost_price || 0),
+          profit: (item.sale_price - (item.cost_price || 0)) * item.quantity,
+          reasonType: item.reasonType || "기타",
+          stockStatus: newStatusCompleted ? "RESTOCKED" : "READY",
+        };
+
+        let savedItem;
+        if (item.id && oldMap.has(item.id)) {
+          savedItem = await tx.returnOrderItem.update({
+            where: { id: item.id },
+            data: itemPayload,
+          });
+          keepIds.push(item.id);
+        } else {
+          savedItem = await tx.returnOrderItem.create({
+            data: { returnOrder_id: returnOrder.id, ...itemPayload },
+          });
+          keepIds.push(savedItem.id);
+        }
+
+        // 신규 상태가 COMPLETED 면 재고 반영(+)
+        if (newStatusCompleted) {
+          await this.updateStock(
+            tx,
+            savedItem,
             item.quantity,
             "RETURNORDER",
             returnOrder.id,
             user.id,
           );
         }
+      }
+
+      // 4. 신규 items 에 포함되지 않은 기존 항목 삭제 (재고는 위에서 이미 롤백됨)
+      const deleteItems = oldItems.filter((i) => !keepIds.includes(i.id));
+      for (const item of deleteItems) {
+        await tx.returnOrderItem.delete({ where: { id: item.id } });
       }
 
       // 알림 등록
@@ -515,14 +524,14 @@ export default {
    * - 기존 상태가 COMPLETED 였다면 각 item 재고를 (-) 로 원복 + 이력 기록
    * - ReturnOrder cascade 로 ReturnOrderItem 삭제
    */
-  async deleteById(id) {
+  async deleteById(id, user) {
     return prisma.$transaction(async (tx) => {
       const returnOrder = await tx.returnOrder.findUnique({
         where: { id },
         include: { items: true },
       });
 
-      if (!returnOrder) throw new AppError("반품 전표가 없습니다.");
+      if (!returnOrder) throw new AppError("반품 전표가 없습니다.", 404, "NOT_FOUND");
 
       // 이미 재고에 반영된 경우에만 재고를 차감(-)하여 원복
       if (returnOrder.status === "COMPLETED") {
@@ -533,7 +542,7 @@ export default {
             -item.quantity,
             "RETURN_CANCEL",
             returnOrder.id,
-            returnOrder.user_id,
+            user?.id ?? returnOrder.user_id,
           );
         }
       }
@@ -546,8 +555,8 @@ export default {
   /**
    * 반품 전표 일괄 삭제 (Promise.all 로 병렬 deleteById)
    */
-  async batchDelete(data = []) {
-    if (!data.length) throw new AppError("요청데이터가 없습니다.", 400);
-    return Promise.all(data.map((row) => this.deleteById(row.id)));
+  async batchDelete(data = [], user) {
+    if (!data.length) throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
+    return Promise.all(data.map((row) => this.deleteById(row.id, user)));
   },
 };

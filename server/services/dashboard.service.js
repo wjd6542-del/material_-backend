@@ -178,12 +178,12 @@ export default {
       }),
 
       /*
-        부족 재고
+        부족 재고: material_id 별 합산만 SQL 에서 처리 (이전엔 전체 Stock 을 끌어와 JS 합산했음)
+        실제 부족 여부 판정과 material 메타 조인은 후속 단계에서 수행
       */
-      prisma.stock.findMany({
-        include: {
-          material: true,
-        },
+      prisma.stock.groupBy({
+        by: ["material_id"],
+        _sum: { quantity: true },
       }),
 
       /*
@@ -231,26 +231,27 @@ export default {
     ]);
 
     /*
-      부족 재고 필터
+      부족 재고 필터: groupBy 로 합산된 수량과 Material.safety_stock 을 비교
+      합산 결과의 material_id 만 추가 조회해 N+1 제거
     */
-    const grouped = {};
-
-    for (const v of lowStockRaw) {
-      if (!grouped[v.material_id]) {
-        grouped[v.material_id] = {
-          material_id: v.material_id,
-          material_name: v.material.name,
-          safety_stock: v.material.safety_stock,
-          stock: 0,
-        };
-      }
-
-      grouped[v.material_id].stock += v.quantity;
-    }
-
-    const lowStock = Object.values(grouped).filter(
-      (v) => v.stock < v.safety_stock,
+    const stockMap = new Map(
+      lowStockRaw.map((g) => [g.material_id, g._sum.quantity ?? 0]),
     );
+    const candidateIds = [...stockMap.keys()];
+    const lowStockMaterials = candidateIds.length
+      ? await prisma.material.findMany({
+          where: { id: { in: candidateIds } },
+          select: { id: true, name: true, safety_stock: true },
+        })
+      : [];
+    const lowStock = lowStockMaterials
+      .map((m) => ({
+        material_id: m.id,
+        material_name: m.name,
+        safety_stock: m.safety_stock,
+        stock: stockMap.get(m.id) ?? 0,
+      }))
+      .filter((v) => v.stock < v.safety_stock);
 
     /*
       🔥 이번달 계산 (통계 기반)

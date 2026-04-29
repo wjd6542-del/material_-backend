@@ -25,12 +25,21 @@ export default async function materialRoutes(app) {
     },
   );
 
-  /** 품목 페이지네이션 리스트 @route POST /api/material/pageList */
+  /** 품목 페이지네이션 리스트 (배열 반환, 기존 호환) @route POST /api/material/pageList */
   app.post(
     "/pageList",
     { preHandler: permission("material.view") },
     async (req) => {
       return materialService.getPageList(req.body, req.user);
+    },
+  );
+
+  /** 품목 페이지네이션 리스트 ({rows,total,...} 표준 형태) @route POST /api/material/pagedList */
+  app.post(
+    "/pagedList",
+    { preHandler: permission("material.view") },
+    async (req) => {
+      return materialService.getPagedList(req.body);
     },
   );
 

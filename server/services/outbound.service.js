@@ -1,7 +1,10 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { parsePage } from "../utils/pagination.js";
+import { buildDateRange } from "../utils/dateRange.js";
 import { lockStockById } from "./stock.lock.js";
+import materialService from "./material.service.js";
 
 /**
  * OutboundItem 배열을 supplier_id 별 sale_amount 합계 Map 으로 집계
@@ -119,11 +122,9 @@ export default {
       };
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
     const rows = await prisma.outbound.findMany({
@@ -158,16 +159,12 @@ export default {
       where.outbound_no = { contains: data.outbound_no };
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.created_at = range;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.outbound.findMany({
@@ -218,13 +215,9 @@ export default {
       where.location_id = data.location_id;
     }
 
-    if (data.startDate && data.endDate) {
-      where.outbound = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.outbound = { created_at: range };
     }
 
     const rows = await prisma.outboundItem.findMany({
@@ -268,18 +261,12 @@ export default {
     if (data.warehouse_id) where.warehouse_id = data.warehouse_id;
     if (data.location_id) where.location_id = data.location_id;
 
-    if (data.startDate && data.endDate) {
-      where.outbound = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.outbound = { created_at: range };
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.outboundItem.findMany({
@@ -334,38 +321,13 @@ export default {
 
     // 품목명, 품목코드 검색
     if (data?.searchText) {
-      const materials = await prisma.material.findMany({
-        where: {
-          OR: [
-            {
-              name: {
-                contains: data.searchText,
-              },
-            },
-            {
-              code: {
-                contains: data.searchText,
-              },
-            },
-          ],
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      where.material_id = {
-        in: materials.map((m) => m.id),
-      };
+      const materialIds = await materialService.searchIds(data.searchText);
+      where.material_id = { in: materialIds };
     }
 
-    if (data?.startDate && data?.endDate) {
-      where.outbound = {
-        created_at: {
-          gte: new Date(data.startDate),
-          lte: new Date(data.endDate),
-        },
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.outbound = { created_at: range };
     }
 
     const rows = await prisma.outboundItem.findMany({
@@ -401,7 +363,7 @@ export default {
    * 출고 전표 단건 조회 (user/items 및 각 item 의 warehouse/material/location 포함)
    */
   async getById(id) {
-    if (!id) throw new AppError("ID가 필요합니다.", 400);
+    if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
 
     const item = await prisma.outbound.findUnique({
       where: { id },
@@ -418,7 +380,7 @@ export default {
     });
 
     if (!item) {
-      throw new AppError("존재하지 않는 데이터 입니다.", 404);
+      throw new AppError("존재하지 않는 데이터 입니다.", 404, "NOT_FOUND");
     }
 
     return item;
@@ -505,7 +467,7 @@ export default {
    */
   async batchDelete(data = [], user) {
     if (!data.length) {
-      throw new AppError("요청데이터가 없습니다.", 400);
+      throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
     }
 
     const results = await Promise.all(
@@ -605,7 +567,11 @@ export default {
         });
 
         if (exist) {
-          throw new AppError("이미 존재하는 출고번호입니다.", 400);
+          throw new AppError(
+            "이미 존재하는 출고번호입니다.",
+            400,
+            "DUPLICATE_NO",
+          );
         }
 
         outbound = await tx.outbound.create({
@@ -620,7 +586,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "OUTBOUND",
@@ -644,7 +610,7 @@ export default {
         });
 
         // 알림 등록처리
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             user_id: user.id,
             type: "OUTBOUND",

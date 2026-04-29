@@ -83,15 +83,22 @@ export default {
 
     const item = await prisma.materialCategory.findUnique({ where: { id } });
     if (!item) {
-      throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
+      throw new AppError("존재하지 않는 카테고리 입니다.", 404, "NOT_FOUND");
     }
     return item;
   },
 
-  /** 카테고리 단건 삭제 (자식·품목 연결 무시) */
+  /** 카테고리 단건 삭제 (트랜잭션 보장 + 존재 검증) */
   async deleteById(id) {
     if (!id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
-    return prisma.materialCategory.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const exists = await tx.materialCategory.findUnique({ where: { id } });
+      if (!exists) {
+        throw new AppError("존재하지 않는 카테고리 입니다.", 404, "NOT_FOUND");
+      }
+      await tx.materialCategory.delete({ where: { id } });
+      return true;
+    });
   },
 
   /**

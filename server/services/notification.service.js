@@ -30,12 +30,27 @@ export default {
     });
   },
 
-  /** 알림 단건 읽음 처리 (is_read=true, read_at=now) */
+  /**
+   * 알림 단건 읽음 처리 (is_read=true, read_at=now)
+   * 본인 소유 알림만 수정 가능 — 타인 알림 ID 주입 시 0건 매칭으로 404
+   */
   async read(data, user) {
-    return await prisma.notification.update({
-      where: { id: data.id },
+    if (!user?.id) {
+      throw new AppError("로그인이 필요합니다.", 401, "UNAUTHORIZED");
+    }
+    if (!data?.id) {
+      throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    }
+
+    const result = await prisma.notification.updateMany({
+      where: { id: Number(data.id), user_id: user.id },
       data: { is_read: true, read_at: new Date() },
     });
+
+    if (result.count === 0) {
+      throw new AppError("알림을 찾을 수 없습니다.", 404, "NOT_FOUND");
+    }
+    return { success: true };
   },
 
   /** 현재 사용자의 미읽음 알림을 모두 읽음 처리 */
@@ -86,58 +101,67 @@ export default {
     return result;
   },
 
-  /** 알림 단건 삭제 */
-  async deleteById(id) {
+  /**
+   * 알림 단건 삭제 (본인 소유만)
+   */
+  async deleteById(id, user) {
+    if (!user?.id) {
+      throw new AppError("로그인이 필요합니다.", 401, "UNAUTHORIZED");
+    }
     if (!id) {
       throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
     }
 
-    return await prisma.$transaction(async (tx) => {
-      // 4️⃣ 게시물 삭제
-      await tx.notification.delete({
-        where: { id },
-      });
-      return { success: true };
+    const result = await prisma.notification.deleteMany({
+      where: { id: Number(id), user_id: user.id },
     });
+
+    if (result.count === 0) {
+      throw new AppError("알림을 찾을 수 없습니다.", 404, "NOT_FOUND");
+    }
+    return { success: true };
   },
 
-  /** 알림 일괄 삭제 */
+  /** 알림 일괄 삭제 (본인 소유만) */
   async batchDelete(data = [], user) {
+    if (!user?.id) {
+      throw new AppError("로그인이 필요합니다.", 401, "UNAUTHORIZED");
+    }
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
     }
 
-    const results = await Promise.all(
-      data.map((row, idx) =>
-        this.deleteById(row.id).catch(() => {
-          throw new AppError(
-            `${idx + 1} 번째 데이터 삭제 실패`,
-            400,
-            "BATCH_DELETE_FAILED",
-          );
-        }),
-      ),
-    );
-    return results;
+    const ids = data.map((row) => Number(row.id)).filter((v) => v > 0);
+    if (!ids.length) {
+      throw new AppError("유효한 ID가 없습니다.", 400, "INVALID_PARAMS");
+    }
+
+    const result = await prisma.notification.deleteMany({
+      where: { id: { in: ids }, user_id: user.id },
+    });
+
+    return { count: result.count };
   },
 
-  /** 알림 일괄 읽음 처리 */
+  /** 알림 일괄 읽음 처리 (본인 소유만) */
   async batchRead(data = [], user) {
+    if (!user?.id) {
+      throw new AppError("로그인이 필요합니다.", 401, "UNAUTHORIZED");
+    }
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400, "NOT_FOUND_DATA");
     }
 
-    const results = await Promise.all(
-      data.map((row, idx) =>
-        this.read(row, user).catch(() => {
-          throw new AppError(
-            `${idx + 1} 번째 데이터 읽기 실패`,
-            400,
-            "BATCH_DELETE_FAILED",
-          );
-        }),
-      ),
-    );
-    return results;
+    const ids = data.map((row) => Number(row.id)).filter((v) => v > 0);
+    if (!ids.length) {
+      throw new AppError("유효한 ID가 없습니다.", 400, "INVALID_PARAMS");
+    }
+
+    const result = await prisma.notification.updateMany({
+      where: { id: { in: ids }, user_id: user.id },
+      data: { is_read: true, read_at: new Date() },
+    });
+
+    return { count: result.count };
   },
 };

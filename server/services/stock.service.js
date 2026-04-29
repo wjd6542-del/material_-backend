@@ -1,7 +1,10 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
+import { parsePage } from "../utils/pagination.js";
+import { buildDateRange } from "../utils/dateRange.js";
 import { ensureStockRow, lockStockById } from "./stock.lock.js";
+import materialService from "./material.service.js";
 
 export default {
   /**
@@ -108,40 +111,18 @@ export default {
     }
 
     // 날짜 검색
-    if (data?.startDate && data?.endDate) {
-      where.updated_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.updated_at = range;
     }
 
     // 출고 화면에서 스캔 코드 검색 들어 왔다
     if (data?.scan_code) {
-      const materials = await prisma.material.findMany({
-        where: {
-          OR: [
-            { code: { contains: data.scan_code } },
-            { name: { contains: data.scan_code } },
-          ],
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!materials.length) {
+      const materialIds = await materialService.searchIds(data.scan_code);
+      if (!materialIds.length) {
         throw new AppError("제품을 찾지못했습니다.", 404, "NOT_FOUND");
       }
-
-      // 아이디 배열로 재고 검색 처리 해야함  material_id
-      const materialIds = materials.map((m) => m.id);
-
-      // 제품 아이디로 검색 진행
-      if (materialIds.length) {
-        where.material_id = {
-          in: materialIds,
-        };
-      }
+      where.material_id = { in: materialIds };
     }
 
     const rows = await prisma.stock.findMany({
@@ -185,37 +166,20 @@ export default {
     if (data?.warehouse_id) where.warehouse_id = data.warehouse_id;
     if (data?.location_id) where.location_id = data.location_id;
 
-    if (data?.startDate && data?.endDate) {
-      where.updated_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.updated_at = range;
     }
 
     if (data?.scan_code) {
-      const materials = await prisma.material.findMany({
-        where: {
-          OR: [
-            { code: { contains: data.scan_code } },
-            { name: { contains: data.scan_code } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      if (!materials.length) {
+      const materialIds = await materialService.searchIds(data.scan_code);
+      if (!materialIds.length) {
         throw new AppError("제품을 찾지못했습니다.", 404, "NOT_FOUND");
       }
-
-      const materialIds = materials.map((m) => m.id);
-      if (materialIds.length) {
-        where.material_id = { in: materialIds };
-      }
+      where.material_id = { in: materialIds };
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.stock.findMany({
@@ -262,7 +226,7 @@ export default {
 
     const item = await prisma.stock.findUnique({ where: { id } });
     if (!item) {
-      throw new AppError("존재하지 않는 편의시설입니다.", 404, "NOT_FOUND");
+      throw new AppError("존재하지 않는 재고 입니다.", 404, "NOT_FOUND");
     }
     return item;
   },
@@ -294,40 +258,16 @@ export default {
       where.type = data.type;
     }
 
-    // 검색 기준 적용
     // 품목명, 품목코드 검색
     if (data?.searchText) {
-      const materials = await prisma.material.findMany({
-        where: {
-          OR: [
-            {
-              name: {
-                contains: data.searchText,
-              },
-            },
-            {
-              code: {
-                contains: data.searchText,
-              },
-            },
-          ],
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      where.material_id = {
-        in: materials.map((m) => m.id),
-      };
+      const materialIds = await materialService.searchIds(data.searchText);
+      where.material_id = { in: materialIds };
     }
 
     // 날짜 검색
-    if (data.startDate && data.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.created_at = range;
     }
 
     const rows = await prisma.stockHistory.findMany({
@@ -369,31 +309,16 @@ export default {
     if (data.type) where.type = data.type;
 
     if (data?.searchText) {
-      const materials = await prisma.material.findMany({
-        where: {
-          OR: [
-            { name: { contains: data.searchText } },
-            { code: { contains: data.searchText } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      where.material_id = {
-        in: materials.map((m) => m.id),
-      };
+      const materialIds = await materialService.searchIds(data.searchText);
+      where.material_id = { in: materialIds };
     }
 
-    if (data.startDate && data.endDate) {
-      where.created_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data.startDate, data.endDate);
+      if (range) where.created_at = range;
     }
 
-    const page = Math.max(1, Number(data?.page) || 1);
-    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePage(data);
 
     const [rows, total] = await Promise.all([
       prisma.stockHistory.findMany({
@@ -599,8 +524,6 @@ export default {
       });
     });
 
-    console.log("locations >> 정보 확인", locations);
-
     // 5️⃣ 반환
     return locations.map((loc) => ({
       id: loc.id,
@@ -721,13 +644,15 @@ export default {
   async transfer(data, user) {
     const { material_id, from_location_id, to_location_id, quantity } = data;
 
-    if (!material_id) throw new Error("품목 없음");
-    if (!from_location_id) throw new Error("출발 위치 없음");
-    if (!to_location_id) throw new Error("도착 위치 없음");
+    if (!material_id) throw new AppError("품목 없음", 400, "INVALID_PARAMS");
+    if (!from_location_id)
+      throw new AppError("출발 위치 없음", 400, "INVALID_PARAMS");
+    if (!to_location_id)
+      throw new AppError("도착 위치 없음", 400, "INVALID_PARAMS");
     if (from_location_id === to_location_id) {
-      throw new Error("같은 위치 이동 불가");
+      throw new AppError("같은 위치 이동 불가", 400, "INVALID_PARAMS");
     }
-    if (quantity <= 0) throw new Error("수량 오류");
+    if (quantity <= 0) throw new AppError("수량 오류", 400, "INVALID_PARAMS");
 
     return await prisma.$transaction(async (tx) => {
       // 🔥 0. location → warehouse 추출
@@ -737,7 +662,7 @@ export default {
       ]);
 
       if (!fromLocation || !toLocation) {
-        throw new Error("위치 정보 없음");
+        throw new AppError("위치 정보 없음", 404, "NOT_FOUND");
       }
 
       const fromWarehouseId = fromLocation.warehouse_id;
@@ -760,7 +685,7 @@ export default {
       });
 
       if (!fromStock) {
-        throw new Error("출발 재고 없음");
+        throw new AppError("출발 재고 없음", 404, "NOT_FOUND");
       }
 
       const fromShelfId = fromStock.shelf_id ?? null;
@@ -782,14 +707,19 @@ export default {
       const locks = {};
       for (const id of orderedIds) {
         const l = await lockStockById(tx, id);
-        if (!l) throw new Error(`Stock 행 잠금 실패 (id=${id})`);
+        if (!l)
+          throw new AppError(
+            `Stock 행 잠금 실패 (id=${id})`,
+            500,
+            "STOCK_LOCK_FAILED",
+          );
         locks[id] = l;
       }
       const fromLocked = locks[fromStock.id];
       const toLocked = locks[toStockRow.id];
 
       if (fromLocked.quantity < quantity) {
-        throw new Error("재고 부족");
+        throw new AppError("재고 부족", 400, "INSUFFICIENT_STOCK");
       }
 
       const fromBefore = fromLocked.quantity;

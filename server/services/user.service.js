@@ -1,8 +1,26 @@
 import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 import bcrypt from "bcrypt";
+import { buildDateRange } from "../utils/dateRange.js";
 
 export default {
+  /**
+   * id 배열로 User Map(id → {id,name,username}) 을 반환한다.
+   * 여러 서비스(material/purchaseOrder/supplier 등)에서 created_by/updated_by
+   * 표시용으로 반복하던 패턴을 단일화한 헬퍼.
+   * @param {Array<number|null|undefined>} ids
+   * @returns {Promise<Map<number, {id:number,name:string,username:string}>>}
+   */
+  async getMapByIds(ids) {
+    const uniq = [...new Set((ids || []).filter((v) => v != null))];
+    if (!uniq.length) return new Map();
+    const rows = await prisma.user.findMany({
+      where: { id: { in: uniq } },
+      select: { id: true, name: true, username: true },
+    });
+    return new Map(rows.map((u) => [u.id, u]));
+  },
+
   /**
    * 사용자 리스트 (role_id/키워드/기간 필터, role 조인)
    * @param {{role_id?:number,keyword?:string,startDate?:string,endDate?:string}} data
@@ -32,11 +50,9 @@ export default {
     }
 
     // 날짜 검색
-    if (data?.startDate && data?.endDate) {
-      where.updated_at = {
-        gte: new Date(data.startDate),
-        lte: new Date(data.endDate),
-      };
+    {
+      const range = buildDateRange(data?.startDate, data?.endDate);
+      if (range) where.updated_at = range;
     }
 
     const rows = await prisma.user.findMany({
@@ -178,20 +194,19 @@ export default {
    */
   async ipToggle(data) {
     if (!data.user_id) {
-      new AppError("회원 정보가 없습니다", 400, "NOT_FOUND");
+      throw new AppError("회원 정보가 없습니다", 400, "NOT_FOUND");
     }
 
-    if (!data.ip_restrict) {
-      new AppError("활성정보가 없습니다", 400, "NOT_FOUND");
+    if (data.ip_restrict === undefined || data.ip_restrict === null) {
+      throw new AppError("활성정보가 없습니다", 400, "INVALID_PARAMS");
     }
 
-    // 업데이트 진행
     const result = await prisma.user.update({
       where: {
         id: Number(data.user_id),
       },
       data: {
-        ip_restrict: data.ip_restrict,
+        ip_restrict: !!data.ip_restrict,
       },
     });
 
