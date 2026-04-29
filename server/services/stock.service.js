@@ -170,6 +170,90 @@ export default {
   },
 
   /**
+   * 재고 페이지네이션 리스트 (getList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getPageList(data) {
+    const where = {};
+
+    if (data?.in_stock) {
+      where.quantity = { gt: 0 };
+    }
+
+    if (data?.material_id) where.material_id = data.material_id;
+    if (data?.warehouse_id) where.warehouse_id = data.warehouse_id;
+    if (data?.location_id) where.location_id = data.location_id;
+
+    if (data?.startDate && data?.endDate) {
+      where.updated_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
+    if (data?.scan_code) {
+      const materials = await prisma.material.findMany({
+        where: {
+          OR: [
+            { code: { contains: data.scan_code } },
+            { name: { contains: data.scan_code } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!materials.length) {
+        throw new AppError("제품을 찾지못했습니다.", 404, "NOT_FOUND");
+      }
+
+      const materialIds = materials.map((m) => m.id);
+      if (materialIds.length) {
+        where.material_id = { in: materialIds };
+      }
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.stock.findMany({
+        where,
+        include: {
+          material: true,
+          warehouse: true,
+          location: true,
+        },
+        orderBy: { updated_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.stock.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.material?.code),
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location_name: row.location?.name ?? "",
+        location_code: row.location?.code ?? "",
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
+  /**
    * 재고 단건 조회
    * @param {number} id Stock.id
    */
@@ -269,6 +353,82 @@ export default {
     );
 
     return result;
+  },
+
+  /**
+   * StockHistory 페이지네이션 리스트 (getDetailList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getDetailPageList(data) {
+    const where = {};
+
+    if (data.material_id) where.material_id = data.material_id;
+    if (data.warehouse_id) where.warehouse_id = data.warehouse_id;
+    if (data.location_id) where.location_id = data.location_id;
+    if (data.type) where.type = data.type;
+
+    if (data?.searchText) {
+      const materials = await prisma.material.findMany({
+        where: {
+          OR: [
+            { name: { contains: data.searchText } },
+            { code: { contains: data.searchText } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      where.material_id = {
+        in: materials.map((m) => m.id),
+      };
+    }
+
+    if (data.startDate && data.endDate) {
+      where.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.stockHistory.findMany({
+        where,
+        include: {
+          material: true,
+          warehouse: true,
+          location: true,
+        },
+        orderBy: { created_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.stockHistory.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.material?.code),
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location_name: row.location?.name ?? "",
+        location_code: row.location?.code ?? "",
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   /**

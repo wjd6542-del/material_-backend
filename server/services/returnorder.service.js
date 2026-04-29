@@ -115,6 +115,55 @@ export default {
   },
 
   /**
+   * 반품 전표 페이지네이션 리스트 (getList 와 동일 필터 + page/limit)
+   * @param {{page?:number,limit?:number,return_no?:string,status?:string,startDate?:string,endDate?:string}} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getPageList(data) {
+    const where = {};
+
+    if (data?.return_no) where.return_no = { contains: data.return_no };
+    if (data?.status) where.status = data.status;
+
+    if (data?.startDate && data?.endDate) {
+      where.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.returnOrder.findMany({
+        where,
+        include: { items: true },
+        orderBy: { created_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.returnOrder.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.return_no),
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
+  /**
    * 반품 아이템(ReturnOrderItem) 리스트 (품목/창고/위치/상태/기간 필터)
    */
   async getDetailList(data) {
@@ -177,6 +226,73 @@ export default {
     );
 
     return result;
+  },
+
+  /**
+   * 반품 아이템 페이지네이션 리스트 (getDetailList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getDetailPageList(data) {
+    const where = {};
+
+    if (data?.return_no) where.return_no = { contains: data.return_no };
+    if (data?.material_id) where.material_id = data.material_id;
+    if (data?.warehouse_id) where.warehouse_id = data.warehouse_id;
+    if (data?.location_id) where.location_id = data.location_id;
+    if (data?.status) where.status = data.status;
+
+    if (data.startDate && data.endDate) {
+      where.returnOrder = {
+        created_at: {
+          gte: new Date(data.startDate),
+          lte: new Date(data.endDate),
+        },
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.returnOrderItem.findMany({
+        where,
+        include: {
+          material: true,
+          location: true,
+          warehouse: true,
+          returnOrder: true,
+        },
+        orderBy: {
+          returnOrder: { created_at: "desc" },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.returnOrderItem.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        qrcode: await generateQR(row.returnOrder.return_no),
+        return_no: row.returnOrder.return_no,
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location: row.location?.code ?? "",
+        created_at: row.returnOrder?.created_at ?? "",
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   /**

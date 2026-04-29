@@ -31,6 +31,15 @@ export default async function outboundRoutes(app) {
     },
   );
 
+  /** 출고 전표 페이지네이션 리스트 @route POST /api/outbound/pageList */
+  app.post(
+    "/pageList",
+    { preHandler: permission("outbound.view") },
+    async (req) => {
+      return outboundService.getPageList(req.body);
+    },
+  );
+
   /** 출고 현황 집계 @route POST /api/outbound/boardCount */
   app.post(
     "/boardCount",
@@ -46,6 +55,15 @@ export default async function outboundRoutes(app) {
     { preHandler: permission("outbound.detail.view") },
     async (req) => {
       return outboundService.detailList(req.body);
+    },
+  );
+
+  /** 출고 상세 아이템 페이지네이션 리스트 @route POST /api/outbound/detail/pageList */
+  app.post(
+    "/detail/pageList",
+    { preHandler: permission("outbound.detail.view") },
+    async (req) => {
+      return outboundService.detailPageList(req.body);
     },
   );
 
@@ -74,7 +92,7 @@ export default async function outboundRoutes(app) {
     { preHandler: permission("outbound.delete") },
     async (req) => {
       const params = validate(idParamSchema, req.body);
-      return outboundService.deleteById(params.id);
+      return outboundService.deleteById(params.id, req.user);
     },
   );
 
@@ -105,7 +123,7 @@ export default async function outboundRoutes(app) {
     { preHandler: permission("outbound.delete") },
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
-      return outboundService.batchDelete(body);
+      return outboundService.batchDelete(body, req.user);
     },
   );
 }

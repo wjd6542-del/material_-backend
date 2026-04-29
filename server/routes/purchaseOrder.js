@@ -27,6 +27,20 @@ export default async function purchaseOrderRoutes(app) {
   );
 
   /**
+   * 발주 전표 페이지네이션 리스트
+   * @route POST /api/purchaseOrder/pageList
+   */
+  app.post(
+    "/pageList",
+    {
+      preHandler: permission("purchaseorder.view"),
+    },
+    async (req) => {
+      return purchaseOrderService.getPageList(req.body);
+    },
+  );
+
+  /**
    * 발주 품목(상세) 리스트 조회 (품목/거래처/상태/기간 필터)
    * @route POST /api/purchaseOrder/detail/list
    */
@@ -37,6 +51,20 @@ export default async function purchaseOrderRoutes(app) {
     },
     async (req) => {
       return purchaseOrderService.detailList(req.body);
+    },
+  );
+
+  /**
+   * 발주 품목(상세) 페이지네이션 리스트
+   * @route POST /api/purchaseOrder/detail/pageList
+   */
+  app.post(
+    "/detail/pageList",
+    {
+      preHandler: permission("purchaseorder.detail.view"),
+    },
+    async (req) => {
+      return purchaseOrderService.detailPageList(req.body);
     },
   );
 

@@ -31,12 +31,30 @@ export default async function returnorderRoutes(app) {
     },
   );
 
+  /** 반품 전표 페이지네이션 리스트 @route POST /api/returnorder/pageList */
+  app.post(
+    "/pageList",
+    { preHandler: permission("returnorder.view") },
+    async (req) => {
+      return returnorderService.getPageList(req.body);
+    },
+  );
+
   /** 반품 상세 아이템 리스트 @route POST /api/returnorder/detail/list */
   app.post(
     "/detail/list",
     { preHandler: permission("returnorder.detail.view") },
     async (req) => {
       return returnorderService.getDetailList(req.body);
+    },
+  );
+
+  /** 반품 상세 아이템 페이지네이션 리스트 @route POST /api/returnorder/detail/pageList */
+  app.post(
+    "/detail/pageList",
+    { preHandler: permission("returnorder.detail.view") },
+    async (req) => {
+      return returnorderService.getDetailPageList(req.body);
     },
   );
 

@@ -99,6 +99,84 @@ export default {
   },
 
   /**
+   * 발주 전표 페이지네이션 리스트 (getList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getPageList(data) {
+    const where = {};
+
+    if (data?.order_no) where.order_no = { contains: data.order_no };
+    if (data?.status) where.status = data.status;
+    if (data?.supplier_id) where.supplier_id = Number(data.supplier_id);
+
+    if (data?.startDate && data?.endDate) {
+      where.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+    if (data?.orderStartDate && data?.orderEndDate) {
+      where.order_date = {
+        gte: new Date(data.orderStartDate),
+        lte: new Date(data.orderEndDate),
+      };
+    }
+    if (data?.deliveryStartDate && data?.deliveryEndDate) {
+      where.delivery_date = {
+        gte: new Date(data.deliveryStartDate),
+        lte: new Date(data.deliveryEndDate),
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.purchaseOrder.findMany({
+        where,
+        include: {
+          supplier: true,
+          items: { include: { material: true } },
+        },
+        orderBy: { created_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.purchaseOrder.count({ where }),
+    ]);
+
+    const userMap = await this.getUserMap(
+      rows.flatMap((r) => [r.created_by, r.updated_by]),
+    );
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        supplier_name: row.supplier?.name ?? "",
+        created_by_name: userMap.get(row.created_by)?.name ?? "",
+        updated_by_name: userMap.get(row.updated_by)?.name ?? "",
+        qrcode: await generateQR(row.order_no),
+        items: row.items.map((it) => ({
+          ...it,
+          material_code: it.material?.code ?? "",
+          material_name: it.material?.name ?? "",
+          spec: it.material?.spec ?? "",
+        })),
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
+  /**
    * 발주 품목(PurchaseOrderItem) 리스트 (품목/거래처/상태/기간 필터)
    * - startDate/endDate: 발주 전표 created_at
    * - orderStartDate/orderEndDate: 발주일자 order_date
@@ -194,6 +272,102 @@ export default {
     );
 
     return result;
+  },
+
+  /**
+   * 발주 품목 페이지네이션 리스트 (detailList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async detailPageList(data) {
+    const where = {};
+
+    if (data.material_id) where.material_id = Number(data.material_id);
+    if (data.supplier_id) where.supplier_id = Number(data.supplier_id);
+
+    const poWhere = {};
+    if (data.status) poWhere.status = data.status;
+    if (data.order_no) poWhere.order_no = { contains: data.order_no };
+    if (data.startDate && data.endDate) {
+      poWhere.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+    if (data.orderStartDate && data.orderEndDate) {
+      poWhere.order_date = {
+        gte: new Date(data.orderStartDate),
+        lte: new Date(data.orderEndDate),
+      };
+    }
+    if (data.deliveryStartDate && data.deliveryEndDate) {
+      poWhere.delivery_date = {
+        gte: new Date(data.deliveryStartDate),
+        lte: new Date(data.deliveryEndDate),
+      };
+    }
+    if (Object.keys(poWhere).length) {
+      where.purchaseOrder = poWhere;
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.purchaseOrderItem.findMany({
+        where,
+        include: {
+          purchaseOrder: true,
+          material: true,
+          supplier: true,
+        },
+        orderBy: {
+          purchaseOrder: { created_at: "desc" },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.purchaseOrderItem.count({ where }),
+    ]);
+
+    const userMap = await this.getUserMap(
+      rows.flatMap((r) => [
+        r.purchaseOrder?.created_by,
+        r.purchaseOrder?.updated_by,
+      ]),
+    );
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        order_no: row.purchaseOrder?.order_no ?? "",
+        order_date: row.purchaseOrder?.order_date ?? null,
+        delivery_date: row.purchaseOrder?.delivery_date ?? null,
+        status: row.purchaseOrder?.status ?? "",
+        vat_applied: row.purchaseOrder?.vat_applied ?? true,
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        spec: row.material?.spec ?? "",
+        supplier_name: row.supplier?.name ?? "",
+        created_at: row.purchaseOrder?.created_at ?? null,
+        created_by_name:
+          userMap.get(row.purchaseOrder?.created_by)?.name ?? "",
+        updated_by_name:
+          userMap.get(row.purchaseOrder?.updated_by)?.name ?? "",
+        qrcode: row.purchaseOrder?.order_no
+          ? await generateQR(row.purchaseOrder.order_no)
+          : "",
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   /**

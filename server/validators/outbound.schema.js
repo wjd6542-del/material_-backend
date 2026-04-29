@@ -25,6 +25,7 @@ export const saveSchema = z.object({
       return val < 0 ? 0 : val;
     }),
   outbound_no: z.string().trim(),
+  is_unpaid: z.coerce.boolean().optional(),
   memo: z.string().trim(),
   items: z.array(itemsSchema),
 });

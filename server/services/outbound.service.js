@@ -3,6 +3,56 @@ import AppError from "../errors/AppError.js";
 import { generateQR } from "../utils/qrcode.js";
 import { lockStockById } from "./stock.lock.js";
 
+/**
+ * OutboundItem 배열을 supplier_id 별 sale_amount 합계 Map 으로 집계
+ * - supplier_id 가 없는 항목은 제외
+ * - 각 item 의 sale_amount 를 우선 사용, 없으면 quantity * sale_price 로 재계산
+ * @param {Array} items
+ * @returns {Map<number, number>}
+ */
+function aggregateSupplierAmounts(items) {
+  const map = new Map();
+  for (const item of items) {
+    if (!item?.supplier_id) continue;
+    const amount = Number(
+      item.sale_amount ??
+        Number(item.quantity ?? 0) * Number(item.sale_price ?? 0),
+    );
+    map.set(item.supplier_id, (map.get(item.supplier_id) || 0) + amount);
+  }
+  return map;
+}
+
+/**
+ * 거래처 receivable(미수금) 증감 반영 + SupplierHistory 스냅샷 기록 (트랜잭션 내)
+ * @param {Prisma.TransactionClient} tx
+ * @param {Map<number, number>} deltaMap supplier_id → 증감액 (양수: 미수 증가, 음수: 감소)
+ * @param {number|null} userId 처리자 ID
+ * @param {string} outboundNo 참조 출고번호 (이력 reason 용)
+ */
+async function applySupplierReceivableDelta(tx, deltaMap, userId, outboundNo) {
+  for (const [supplierId, delta] of deltaMap) {
+    if (!delta) continue;
+
+    const updated = await tx.supplier.update({
+      where: { id: supplierId },
+      data: { receivable: { increment: delta } },
+    });
+
+    await tx.supplierHistory.create({
+      data: {
+        supplier_id: supplierId,
+        type: updated.type,
+        receivable: updated.receivable,
+        payable: updated.payable,
+        action: "UPDATE",
+        updated_by: userId,
+        reason: `출고 ${outboundNo} 반영 (${delta > 0 ? "+" : ""}${delta})`,
+      },
+    });
+  }
+}
+
 export default {
   /**
    * 출고 전표 전체 리스트 (user, items 포함)
@@ -97,6 +147,60 @@ export default {
   },
 
   /**
+   * 출고 전표 페이지네이션 리스트 (getList 와 동일 필터 + page/limit)
+   * @param {{page?:number,limit?:number,outbound_no?:string,startDate?:string,endDate?:string}} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async getPageList(data) {
+    const where = {};
+
+    if (data?.outbound_no) {
+      where.outbound_no = { contains: data.outbound_no };
+    }
+
+    if (data?.startDate && data?.endDate) {
+      where.created_at = {
+        gte: new Date(data.startDate),
+        lte: new Date(data.endDate),
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.outbound.findMany({
+        where,
+        include: {
+          user: true,
+          items: true,
+        },
+        orderBy: { created_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.outbound.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        username: row.user?.username ?? "",
+        qrcode: await generateQR(row.outbound_no),
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+
+  /**
    * 출고 아이템(OutboundItem) 리스트 (품목/창고/위치/기간 필터)
    */
   async detailList(data) {
@@ -150,6 +254,71 @@ export default {
     );
 
     return result;
+  },
+
+  /**
+   * 출고 아이템 페이지네이션 리스트 (detailList 와 동일 필터 + page/limit)
+   * @param {Object} data
+   * @returns {Promise<{rows:Array,total:number,page:number,limit:number,totalPages:number}>}
+   */
+  async detailPageList(data) {
+    const where = {};
+
+    if (data.material_id) where.material_id = data.material_id;
+    if (data.warehouse_id) where.warehouse_id = data.warehouse_id;
+    if (data.location_id) where.location_id = data.location_id;
+
+    if (data.startDate && data.endDate) {
+      where.outbound = {
+        created_at: {
+          gte: new Date(data.startDate),
+          lte: new Date(data.endDate),
+        },
+      };
+    }
+
+    const page = Math.max(1, Number(data?.page) || 1);
+    const limit = Math.max(1, Math.min(Number(data?.limit) || 20, 100));
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.outboundItem.findMany({
+        where,
+        include: {
+          outbound: true,
+          material: true,
+          warehouse: true,
+          location: true,
+        },
+        orderBy: {
+          outbound: { created_at: "desc" },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.outboundItem.count({ where }),
+    ]);
+
+    const result = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        outbound_code: row.outbound?.outbound_no ?? "",
+        material_code: row.material?.code ?? "",
+        material_name: row.material?.name ?? "",
+        warehouse_name: row.warehouse?.name ?? "",
+        location: row.location?.code ?? "",
+        created_at: row.outbound?.created_at ?? "",
+        qrcode: await generateQR(row.outbound.outbound_no),
+      })),
+    );
+
+    return {
+      rows: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   /**
@@ -334,14 +503,14 @@ export default {
   /**
    * 출고 전표 일괄 삭제 (각 건 deleteById 실행, 실패 건 인덱스 포함 에러)
    */
-  async batchDelete(data = []) {
+  async batchDelete(data = [], user) {
     if (!data.length) {
       throw new AppError("요청데이터가 없습니다.", 400);
     }
 
     const results = await Promise.all(
       data.map((row, idx) =>
-        this.deleteById(row.id).catch(() => {
+        this.deleteById(row.id, user).catch(() => {
           throw new AppError(`${idx + 1} 번째 데이터 삭제 실패`);
         }),
       ),
@@ -355,7 +524,7 @@ export default {
    * - 각 OutboundItem 에 대해 updateStock(+quantity) 로 재고 복원 + 이력 기록
    * - Outbound cascade 로 OutboundItem 정리
    */
-  async deleteById(id) {
+  async deleteById(id, user) {
     return prisma.$transaction(async (tx) => {
       const outbound = await tx.outbound.findUnique({
         where: { id },
@@ -374,6 +543,22 @@ export default {
           "outbound_cancel",
           outbound.id,
           outbound.user_id,
+        );
+      }
+
+      // 거래처 미수금 롤백: 이 출고의 모든 supplier 금액을 음수 delta 로 적용
+      // is_unpaid=false (수금 완료 처리된 전표) 인 경우 receivable 에 반영된 적이 없으므로 롤백 생략
+      if (outbound.is_unpaid) {
+        const rollbackAmounts = aggregateSupplierAmounts(outbound.items);
+        const deltaMap = new Map();
+        for (const [sid, amount] of rollbackAmounts) {
+          if (amount !== 0) deltaMap.set(sid, -amount);
+        }
+        await applySupplierReceivableDelta(
+          tx,
+          deltaMap,
+          user?.id ?? outbound.user_id,
+          `${outbound.outbound_no}(삭제)`,
         );
       }
 
@@ -400,6 +585,17 @@ export default {
     return prisma.$transaction(async (tx) => {
       let outbound;
 
+      const newUnpaid = data.is_unpaid !== false;
+
+      // 기존 전표(items + is_unpaid) 스냅샷을 update 전에 확보 — receivable delta 산정에 사용
+      const oldOutbound = data.id
+        ? await tx.outbound.findUnique({
+            where: { id: data.id },
+            include: { items: true },
+          })
+        : null;
+      const oldUnpaid = oldOutbound?.is_unpaid ?? false;
+
       if (!data.id) {
         const exist = await tx.outbound.findFirst({
           where: {
@@ -415,6 +611,7 @@ export default {
         outbound = await tx.outbound.create({
           data: {
             outbound_no: data.outbound_no,
+            is_unpaid: newUnpaid,
             user_id: user.id,
             memo: data.memo,
             created_by: user.id,
@@ -439,6 +636,7 @@ export default {
           where: { id: data.id },
           data: {
             outbound_no: data.outbound_no,
+            is_unpaid: newUnpaid,
             user_id: user.id,
             memo: data.memo,
             updated_by: user.id,
@@ -459,11 +657,7 @@ export default {
         });
       }
 
-      const oldItems = data.id
-        ? await tx.outboundItem.findMany({
-            where: { outbound_id: outbound.id },
-          })
-        : [];
+      const oldItems = oldOutbound?.items ?? [];
 
       const oldMap = new Map(oldItems.map((i) => [i.id, i]));
       const keepIds = [];
@@ -557,6 +751,32 @@ export default {
           where: { id: item.id },
         });
       }
+
+      // 거래처 미수금 반영:
+      // - 이전 items 합계 vs 신규 items 합계의 차이를 supplier 별로 계산
+      // - is_unpaid=false (수금 완료) 인 측은 0 으로 취급해 receivable 미반영
+      //   → 미수→완료 전이는 이전 금액만큼 차감, 완료→미수 전이는 신규 금액만큼 가산
+      // - 0 이 아닌 delta 에 대해서만 supplier.receivable 증감 + SupplierHistory 기록
+      const oldAmounts = oldUnpaid
+        ? aggregateSupplierAmounts(oldItems)
+        : new Map();
+      const newAmounts = newUnpaid
+        ? aggregateSupplierAmounts(data.items)
+        : new Map();
+      const supplierIds = new Set([...oldAmounts.keys(), ...newAmounts.keys()]);
+
+      const deltaMap = new Map();
+      for (const sid of supplierIds) {
+        const delta = (newAmounts.get(sid) ?? 0) - (oldAmounts.get(sid) ?? 0);
+        if (delta !== 0) deltaMap.set(sid, delta);
+      }
+
+      await applySupplierReceivableDelta(
+        tx,
+        deltaMap,
+        user.id,
+        outbound.outbound_no,
+      );
 
       return outbound;
     });

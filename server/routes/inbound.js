@@ -43,6 +43,20 @@ export default async function inboundRoutes(app) {
   );
 
   /**
+   * 입고 전표 페이지네이션 리스트 (권한: inbound.view)
+   * @route POST /api/inbound/pageList
+   */
+  app.post(
+    "/pageList",
+    {
+      preHandler: permission("inbound.view"),
+    },
+    async (req) => {
+      return inboundService.getPageList(req.body);
+    },
+  );
+
+  /**
    * 입고 상세(아이템) 리스트 조회 (권한: inbound.detail.view)
    * @route POST /api/inbound/detail/list
    */
@@ -53,6 +67,20 @@ export default async function inboundRoutes(app) {
     },
     async (req) => {
       return inboundService.detailList(req.body);
+    },
+  );
+
+  /**
+   * 입고 상세 아이템 페이지네이션 리스트 (권한: inbound.detail.view)
+   * @route POST /api/inbound/detail/pageList
+   */
+  app.post(
+    "/detail/pageList",
+    {
+      preHandler: permission("inbound.detail.view"),
+    },
+    async (req) => {
+      return inboundService.detailPageList(req.body);
     },
   );
 

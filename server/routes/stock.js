@@ -28,6 +28,15 @@ export default async function stockRoutes(app) {
     return stockService.getList(req.body);
   });
 
+  /** 재고 페이지네이션 리스트 @route POST /api/stock/pageList */
+  app.post(
+    "/pageList",
+    { preHandler: permission("stock.view") },
+    async (req) => {
+      return stockService.getPageList(req.body);
+    },
+  );
+
   /** 재고 요약 (대시보드) @route POST /api/stock/stockSummary */
   app.post(
     "/stockSummary",
@@ -58,6 +67,15 @@ export default async function stockRoutes(app) {
     { preHandler: permission("stock.detail.view") },
     async (req) => {
       return stockService.getDetailList(req.body);
+    },
+  );
+
+  /** 재고 변동 이력 페이지네이션 리스트 @route POST /api/stock/detailPageList */
+  app.post(
+    "/detailPageList",
+    { preHandler: permission("stock.detail.view") },
+    async (req) => {
+      return stockService.getDetailPageList(req.body);
     },
   );
 
