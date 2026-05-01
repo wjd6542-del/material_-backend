@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/warehouse.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 창고(Warehouse) 라우트 (/api/warehouse/*)
@@ -78,6 +79,16 @@ export default async function warehouseRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return warehouseService.batchDelete(body);
+    },
+  );
+
+  /** warehouse 활성/비활성 토글 @route POST /api/warehouse/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("warehouse.house.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return warehouseService.setActive(body, req.user);
     },
   );
 }

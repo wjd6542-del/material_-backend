@@ -8,6 +8,7 @@ import {
   permissionSaveSchema,
 } from "../validators/role.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 역할(Role) 라우트 (/api/role/*)
@@ -89,6 +90,16 @@ export default async function roleRoutes(app) {
     async (req) => {
       const body = validate(permissionSaveSchema, req.body);
       return roleService.permissionSave(body);
+    },
+  );
+
+  /** role 활성/비활성 토글 @route POST /api/role/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("permission.user.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return roleService.setActive(body, req.user);
     },
   );
 }

@@ -6,6 +6,7 @@ import {
   batchDeleteSchema,
 } from "../validators/purchaseOrder.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 발주(PurchaseOrder) 라우트 (/api/purchaseOrder/*)
@@ -141,6 +142,16 @@ export default async function purchaseOrderRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return purchaseOrderService.batchDelete(body);
+    },
+  );
+
+  /** purchaseOrder 활성/비활성 토글 @route POST /api/purchaseOrder/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("purchaseorder.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return purchaseOrderService.setActive(body, req.user);
     },
   );
 }

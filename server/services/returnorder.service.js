@@ -7,10 +7,13 @@ import { ensureAndLockStock } from "./stock.lock.js";
 
 export default {
   /**
-   * 반품 전표 전체 리스트 (items + material + warehouse 포함, 최신순)
+   * 반품 전표 전체 리스트 (items + material + warehouse 포함, 최신순) — 기본 활성만
    */
-  async getAllList() {
+  async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.returnOrder.findMany({
+      where,
       include: {
         items: {
           include: {
@@ -82,6 +85,7 @@ export default {
    */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.return_no) {
       where.return_no = { contains: data.return_no };
@@ -121,6 +125,7 @@ export default {
    */
   async getPageList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.return_no) where.return_no = { contains: data.return_no };
     if (data?.status) where.status = data.status;
@@ -185,9 +190,13 @@ export default {
       where.status = data.status;
     }
 
+    // 부모(ReturnOrder) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.returnOrder = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.returnOrder = parentWhere;
     }
 
     const rows = await prisma.returnOrderItem.findMany({
@@ -234,9 +243,13 @@ export default {
     if (data?.location_id) where.location_id = data.location_id;
     if (data?.status) where.status = data.status;
 
+    // 부모(ReturnOrder) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.returnOrder = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.returnOrder = parentWhere;
     }
 
     const { page, limit, skip } = parsePage(data);
@@ -279,6 +292,18 @@ export default {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  },
+
+  /** 반품 전표 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.returnOrder.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active, updated_by: user?.id ?? null },
+    });
   },
 
   /**

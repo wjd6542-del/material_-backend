@@ -64,6 +64,7 @@ model Role {
   name        String  @unique // 역할 이름 (고유)
   description String? // 역할 설명
   is_super    Boolean @default(false) // 슈퍼 관리자 여부
+  is_active   Boolean @default(true) // 활성화 여부 (false 면 기본 리스트에서 제외)
   sort        Int     @default(0) // 정렬 순서
 
   users User[]
@@ -110,14 +111,15 @@ model User {
 
 /// 품목 분류 카테고리
 model MaterialCategory {
-  id       Int    @id @default(autoincrement())
-  name     String @unique // 카테고리명 (고유)
-  code     String @default("") // 분류 코드
-  sort     Int    @default(0)
-  parentId Int?   @map("parent_id")
+  id        Int     @id @default(autoincrement())
+  name      String  @unique // 카테고리명 (고유)
+  code      String  @default("") // 분류 코드
+  is_active Boolean @default(true) // 활성화 여부
+  sort      Int     @default(0)
+  parentId  Int?    @map("parent_id")
   // 추가 권장 필드
-  path     String @default("") // 예: "1/5/12/30/" (ID 경로 저장)
-  depth    Int    @default(1) // 현재 뎁스 (1~10 제한용)
+  path      String  @default("") // 예: "1/5/12/30/" (ID 경로 저장)
+  depth     Int     @default(1) // 현재 뎁스 (1~10 제한용)
 
   parent    MaterialCategory?  @relation("CategoryToCategory", fields: [parentId], references: [id])
   children  MaterialCategory[] @relation("CategoryToCategory")
@@ -226,6 +228,8 @@ model MaterialRate {
   wholesale_rate2 Decimal @default(0) @db.Decimal(7, 4) // 도매2 비율
   online_rate     Decimal @default(0) @db.Decimal(7, 4) // 온라인 비율
 
+  is_active Boolean @default(true) // 활성화 여부
+
   updated_by Int? // 수정자 ID
 
   created_at DateTime @default(now())
@@ -277,6 +281,7 @@ model MaterialImage {
 model Tag {
   id         Int      @id @default(autoincrement())
   name       String   @unique // 태그명 (고유)
+  is_active  Boolean  @default(true) // 활성화 여부
   sort       Int      @default(0) // 정렬 순서
   created_at DateTime @default(now())
 
@@ -323,6 +328,7 @@ model Supplier {
   zipcode         String? // 우편번호
   address         String? // 기본주소
   address_detail  String? // 상세주소
+  is_active       Boolean      @default(true) // 활성화 여부
   sort            Int          @default(0)
 
   // 금액 정보 (변경 시 SupplierHistory 에 스냅샷 기록)
@@ -379,6 +385,7 @@ model Business {
   phone           String?   @db.VarChar(50) // 대표 연락처
   mobile          String?   @db.VarChar(50) // 대표 연락처
   fax             String?   @db.VarChar(50) // FAX
+  is_active       Boolean   @default(true) // 활성화 여부
   created_at      DateTime  @default(now())
   updated_at      DateTime? @updatedAt
 }
@@ -393,6 +400,7 @@ model Warehouse {
   code       String   @unique @db.VarChar(50) // 창고 코드 (고유)
   name       String // 창고명
   memo       String? // 메모
+  is_active  Boolean  @default(true) // 활성화 여부
   sort       Int      @default(0)
   created_at DateTime @default(now())
 
@@ -420,6 +428,7 @@ model Location {
   warehouse        Warehouse         @relation(fields: [warehouse_id], references: [id])
   code             String            @db.VarChar(50) // 위치 코드 (창고 내 고유)
   name             String? // 위치명 (선택)
+  is_active        Boolean           @default(true) // 활성화 여부
   sort             Int               @default(0)
   points           Json? // 도면 상 다각형 좌표
   rotation         Float             @default(0) // 도면 회전각
@@ -450,6 +459,7 @@ model Shelf {
   y           Int      @default(0) // 도면 Y 좌표
   width       Int      @default(0) // 도면 너비
   height      Int      @default(0) // 도면 높이
+  is_active   Boolean  @default(true) // 활성화 여부
   sort        Int      @default(0)
   created_at  DateTime @default(now())
 
@@ -546,6 +556,7 @@ model Inbound {
   purchase_date DateTime? // 구매일자
   vat_applied   Boolean   @default(true) // 부가세 적용 여부
   is_unpaid     Boolean   @default(true) // 미수금 여부 (true: 미지급 상태, false: 지급 완료)
+  is_active     Boolean   @default(true) // 활성화 여부
 
   user_id Int
   user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
@@ -600,6 +611,7 @@ model Outbound {
   outbound_no String @unique // 출고 번호 (고유, 예: OUT-20240401-001)
 
   is_unpaid Boolean @default(true) // 미수금 여부 (true: 미수 상태, false: 수금 완료)
+  is_active Boolean @default(true) // 활성화 여부
 
   user_id Int
   user    User @relation(fields: [user_id], references: [id]) // 처리 담당자
@@ -662,6 +674,7 @@ model PurchaseOrder {
 
   status      PurchaseOrderStatus @default(draft) // 상태
   vat_applied Boolean             @default(true) // 부가세 적용 여부
+  is_active   Boolean             @default(true) // 활성화 여부
 
   memo String? // 메모
 
@@ -909,13 +922,14 @@ model Notification {
 
 /// 권한 항목 (기능 단위 접근 제어)
 model Permission {
-  id     Int              @id @default(autoincrement())
-  code   String           @unique // 권한 코드 (예: material.read, inbound.create)
-  name   String // 권한 표시명
-  group  String // UI 그룹 (예: 품목관리, 입고관리)
-  action String           @default("") // HTTP 메서드 또는 액션 유형
-  sort   Int              @default(0)
-  roles  RolePermission[]
+  id        Int              @id @default(autoincrement())
+  code      String           @unique // 권한 코드 (예: material.read, inbound.create)
+  name      String // 권한 표시명
+  group     String // UI 그룹 (예: 품목관리, 입고관리)
+  action    String           @default("") // HTTP 메서드 또는 액션 유형
+  is_active Boolean          @default(true) // 활성화 여부
+  sort      Int              @default(0)
+  roles     RolePermission[]
 }
 
 /// 역할-권한 매핑 (다대다 중간 테이블)
@@ -954,6 +968,7 @@ model ReturnOrder {
   return_no   String       @unique // 반품 번호 (고유, 예: RET-20240401-001)
   status      ReturnStatus @default(REQUESTED) // 반품 진행 상태
   totalAmount Float        @default(0) // 반품 총액
+  is_active   Boolean      @default(true) // 활성화 여부
   memo        String?      @db.Text // 메모
 
   created_by Int? // 등록자 ID

@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/permission.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 권한(Permission) 라우트 (/api/permission/*)
@@ -87,6 +88,16 @@ export default async function permissionRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return permissionService.batchDelete(body);
+    },
+  );
+
+  /** permission 활성/비활성 토글 @route POST /api/permission/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("permission.menu.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return permissionService.setActive(body, req.user);
     },
   );
 }

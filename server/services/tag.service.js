@@ -2,9 +2,12 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  /** 태그 전체 리스트 (sort asc, id asc) */
-  async getAllList() {
+  /** 태그 전체 리스트 (sort asc, id asc) — 기본 활성만, includeInactive=true 면 전체 */
+  async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.tag.findMany({
+      where,
       orderBy: [{ sort: "asc" }, { id: "asc" }],
     });
   },
@@ -12,6 +15,7 @@ export default {
   /** 태그 리스트 (name 부분 매칭, material_id 로 연결된 태그만) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.name) {
       where.name = { contains: data.name };
     }
@@ -24,6 +28,18 @@ export default {
     return prisma.tag.findMany({
       where,
       orderBy: [{ sort: "asc" }, { id: "asc" }],
+    });
+  },
+
+  /** 태그 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.tag.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

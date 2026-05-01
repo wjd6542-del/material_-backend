@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/location.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 위치(Location) 라우트 (/api/location/*)
@@ -78,6 +79,16 @@ export default async function locationRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return locationService.batchDelete(body);
+    },
+  );
+
+  /** location 활성/비활성 토글 @route POST /api/location/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("warehouse.location.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return locationService.setActive(body, req.user);
     },
   );
 }

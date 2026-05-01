@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/business.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 사업자(Business) 라우트 (/api/business/*)
@@ -87,6 +88,16 @@ export default async function businessRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return businessService.batchDelete(body);
+    },
+  );
+
+  /** business 활성/비활성 토글 @route POST /api/business/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("business.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return businessService.setActive(body, req.user);
     },
   );
 }

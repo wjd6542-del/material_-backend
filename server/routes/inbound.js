@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/inbound.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 입고(Inbound) 라우트 (/api/inbound/*)
@@ -157,6 +158,16 @@ export default async function inboundRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return inboundService.batchDelete(body, req.user);
+    },
+  );
+
+  /** inbound 활성/비활성 토글 @route POST /api/inbound/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("inbound.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return inboundService.setActive(body, req.user);
     },
   );
 }

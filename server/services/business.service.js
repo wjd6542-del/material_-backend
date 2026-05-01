@@ -2,16 +2,20 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  /** 사업자 전체 리스트 */
+  /** 사업자 전체 리스트 — 기본 활성만 */
   async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.business.findMany({
+      where,
       orderBy: { id: "asc" },
     });
   },
 
-  /** 사업자 대표 정보 (첫 번째 1건) */
+  /** 사업자 대표 정보 (첫 번째 1건, 활성만) */
   async getInfo() {
     return prisma.business.findFirst({
+      where: { is_active: true },
       orderBy: { id: "asc" },
     });
   },
@@ -19,6 +23,7 @@ export default {
   /** 사업자 리스트 (필터) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.company_name) {
       where.company_name = { contains: data.company_name };
     }
@@ -32,6 +37,18 @@ export default {
     return prisma.business.findMany({
       where,
       orderBy: { id: "asc" },
+    });
+  },
+
+  /** 사업자 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.business.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

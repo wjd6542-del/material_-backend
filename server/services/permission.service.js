@@ -2,9 +2,12 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  /** 권한 전체 리스트 */
+  /** 권한 전체 리스트 — 기본 활성만 */
   async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.permission.findMany({
+      where,
       orderBy: { sort: "asc" },
     });
   },
@@ -12,6 +15,7 @@ export default {
   /** 권한 리스트 (key/keys 필터) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -29,9 +33,10 @@ export default {
     });
   },
 
-  /** 드롭다운 표시용 축약 리스트 (id/text/value) */
+  /** 드롭다운 표시용 축약 리스트 (id/text/value, 기본 활성만) */
   async getViewList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -44,6 +49,18 @@ export default {
         text: true,
         value: true,
       },
+    });
+  },
+
+  /** 권한 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.permission.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

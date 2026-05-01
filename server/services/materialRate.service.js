@@ -95,6 +95,18 @@ export default {
     });
   },
 
+  /** 요율 활성/비활성 토글 (싱글톤이라 일반적으로 호출되지 않지만 일관성 유지용) */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.materialRate.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
+    });
+  },
+
   /**
    * 요율 변경 이력 리스트 (역방향 페이지네이션, 수정자 이름 포함)
    * @param {{beforeId?: number, limit?: number}} data

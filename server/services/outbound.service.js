@@ -58,10 +58,13 @@ async function applySupplierReceivableDelta(tx, deltaMap, userId, outboundNo) {
 
 export default {
   /**
-   * 출고 전표 전체 리스트 (user, items 포함)
+   * 출고 전표 전체 리스트 (user, items 포함) — 기본 활성만
    */
-  async getAllList() {
+  async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.outbound.findMany({
+      where,
       include: {
         user: true,
         items: true,
@@ -115,6 +118,7 @@ export default {
    */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.outbound_no) {
       where.outbound_no = {
@@ -154,6 +158,7 @@ export default {
    */
   async getPageList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.outbound_no) {
       where.outbound_no = { contains: data.outbound_no };
@@ -215,9 +220,13 @@ export default {
       where.location_id = data.location_id;
     }
 
+    // 부모(Outbound) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.outbound = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.outbound = parentWhere;
     }
 
     const rows = await prisma.outboundItem.findMany({
@@ -261,9 +270,13 @@ export default {
     if (data.warehouse_id) where.warehouse_id = data.warehouse_id;
     if (data.location_id) where.location_id = data.location_id;
 
+    // 부모(Outbound) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.outbound = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.outbound = parentWhere;
     }
 
     const { page, limit, skip } = parsePage(data);
@@ -325,9 +338,13 @@ export default {
       where.material_id = { in: materialIds };
     }
 
+    // 부모(Outbound) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data?.startDate, data?.endDate);
-      if (range) where.outbound = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.outbound = parentWhere;
     }
 
     const rows = await prisma.outboundItem.findMany({
@@ -357,6 +374,18 @@ export default {
     );
 
     return result;
+  },
+
+  /** 출고 전표 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.outbound.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active, updated_by: user?.id ?? null },
+    });
   },
 
   /**

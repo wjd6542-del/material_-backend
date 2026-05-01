@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/returnorder.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 반품(ReturnOrder) 라우트 (/api/returnorder/*)
@@ -105,6 +106,16 @@ export default async function returnorderRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return returnorderService.batchDelete(body, req.user);
+    },
+  );
+
+  /** returnorder 활성/비활성 토글 @route POST /api/returnorder/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("returnorder.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return returnorderService.setActive(body, req.user);
     },
   );
 }

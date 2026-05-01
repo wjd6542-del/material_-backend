@@ -6,6 +6,7 @@ import {
   batchSaveSchema,
   batchDeleteSchema,
 } from "../validators/tag.schema.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 태그(Tag) 라우트 (/api/tag/*)
@@ -50,5 +51,11 @@ export default async function tagRoutes(app) {
   app.post("/batchDelete", async (req) => {
     const body = validate(batchDeleteSchema, req.body);
     return tagService.batchDelete(body);
+  });
+
+  /** 태그 활성/비활성 토글 @route POST /api/tag/setActive */
+  app.post("/setActive", async (req) => {
+    const body = validate(setActiveSchema, req.body);
+    return tagService.setActive(body, req.user);
   });
 }

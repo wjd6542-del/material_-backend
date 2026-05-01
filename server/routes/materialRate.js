@@ -5,6 +5,7 @@ import {
   historyListSchema,
 } from "../validators/materialRate.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 품목 요율 공통 설정(MaterialRate) 라우트 (/api/materialRate/*)
@@ -39,6 +40,16 @@ export default async function materialRateRoutes(app) {
 
       const body = validate(historyListSchema, req.body);
       return materialRateService.getHistory(body);
+    },
+  );
+
+  /** materialRate 활성/비활성 토글 @route POST /api/materialRate/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("material.rate.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return materialRateService.setActive(body, req.user);
     },
   );
 }

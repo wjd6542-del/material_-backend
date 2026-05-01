@@ -2,19 +2,25 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  /** 카테고리 전체 리스트 (평면, sort asc) */
+  /** 카테고리 전체 리스트 (평면, sort asc) — 기본 활성만 */
   async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.materialCategory.findMany({
+      where,
       orderBy: { sort: "asc" },
     });
   },
 
   /**
    * 카테고리 트리 반환 (root → children 재귀 구성)
-   * 평면 조회 후 Map 으로 parentId 기준 children 연결
+   * 평면 조회 후 Map 으로 parentId 기준 children 연결 — 기본 활성만
    */
-  async getCategoryTree() {
+  async getCategoryTree(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     const list = await prisma.materialCategory.findMany({
+      where,
       orderBy: { sort: "asc" },
     });
 
@@ -42,6 +48,7 @@ export default {
   /** 카테고리 리스트 (key/keys 필터) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -59,9 +66,10 @@ export default {
     });
   },
 
-  /** 드롭다운 표시용 축약 리스트 */
+  /** 드롭다운 표시용 축약 리스트 (기본 활성만) */
   async getViewList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -74,6 +82,18 @@ export default {
         text: true,
         value: true,
       },
+    });
+  },
+
+  /** 카테고리 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.materialCategory.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

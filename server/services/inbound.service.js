@@ -57,10 +57,13 @@ async function applySupplierPayableDelta(tx, deltaMap, userId, inboundNo) {
 
 export default {
   /**
-   * 입고 전표 전체 리스트 (user, items 포함)
+   * 입고 전표 전체 리스트 (user, items 포함) — 기본 활성만
    */
-  async getAllList() {
+  async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.inbound.findMany({
+      where,
       include: {
         user: true,
         items: true,
@@ -74,6 +77,7 @@ export default {
    */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.inbound_no) {
       where.inbound_no = {
@@ -114,6 +118,7 @@ export default {
    */
   async getPageList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.inbound_no) {
       where.inbound_no = { contains: data.inbound_no };
@@ -185,9 +190,13 @@ export default {
       where.supplier_id = data.supplier_id;
     }
 
+    // 부모(Inbound) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.inbound = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.inbound = parentWhere;
     }
 
     const rows = await prisma.inboundItem.findMany({
@@ -235,9 +244,13 @@ export default {
     if (data.location_id) where.location_id = data.location_id;
     if (data.supplier_id) where.supplier_id = data.supplier_id;
 
+    // 부모(Inbound) 필터 — 비활성 제외 + 기간
     {
+      const parentWhere = {};
+      if (!data?.includeInactive) parentWhere.is_active = true;
       const range = buildDateRange(data.startDate, data.endDate);
-      if (range) where.inbound = { created_at: range };
+      if (range) parentWhere.created_at = range;
+      if (Object.keys(parentWhere).length) where.inbound = parentWhere;
     }
 
     const { page, limit, skip } = parsePage(data);
@@ -282,6 +295,18 @@ export default {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  },
+
+  /** 입고 전표 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.inbound.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active, updated_by: user?.id ?? null },
+    });
   },
 
   /**

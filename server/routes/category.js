@@ -6,6 +6,7 @@ import {
   batchDeleteSchema,
 } from "../validators/category.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 품목 카테고리(MaterialCategory) 라우트 (/api/category/*)
@@ -95,6 +96,16 @@ export default async function categoryRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return categoryService.batchDelete(body);
+    },
+  );
+
+  /** category 활성/비활성 토글 @route POST /api/category/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("material.category.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return categoryService.setActive(body, req.user);
     },
   );
 }

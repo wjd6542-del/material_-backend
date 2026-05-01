@@ -20,9 +20,12 @@ function trackedDiffer(before, after) {
 }
 
 export default {
-  /** 공급업체 전체 리스트 */
+  /** 공급업체 전체 리스트 — 기본 활성만 */
   async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.supplier.findMany({
+      where,
       orderBy: { sort: "asc" },
     });
   },
@@ -30,6 +33,7 @@ export default {
   /** 공급업체 리스트 (key/keys 필터) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -55,9 +59,10 @@ export default {
     return res;
   },
 
-  /** 드롭다운 표시용 축약 리스트 (id/text/value) */
+  /** 드롭다운 표시용 축약 리스트 (id/text/value, 기본 활성만) */
   async getViewList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     if (data?.key) {
       where.key = data.key;
     }
@@ -70,6 +75,18 @@ export default {
         text: true,
         value: true,
       },
+    });
+  },
+
+  /** 공급업체 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.supplier.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

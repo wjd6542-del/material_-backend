@@ -13,6 +13,7 @@ export default {
    */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.order_no) {
       where.order_no = { contains: data.order_no };
@@ -84,6 +85,7 @@ export default {
    */
   async getPageList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.order_no) where.order_no = { contains: data.order_no };
     if (data?.status) where.status = data.status;
@@ -168,6 +170,7 @@ export default {
     }
 
     const poWhere = {};
+    if (!data?.includeInactive) poWhere.is_active = true;
 
     if (data.status) {
       poWhere.status = data.status;
@@ -253,6 +256,7 @@ export default {
     if (data.supplier_id) where.supplier_id = Number(data.supplier_id);
 
     const poWhere = {};
+    if (!data?.includeInactive) poWhere.is_active = true;
     if (data.status) poWhere.status = data.status;
     if (data.order_no) poWhere.order_no = { contains: data.order_no };
     {
@@ -329,6 +333,18 @@ export default {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  },
+
+  /** 발주 전표 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.purchaseOrder.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active, updated_by: user?.id ?? null },
+    });
   },
 
   /**

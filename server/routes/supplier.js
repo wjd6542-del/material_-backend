@@ -8,6 +8,7 @@ import {
   historyListSchema,
 } from "../validators/supplier.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 공급업체(Supplier) 라우트 (/api/supplier/*)
@@ -89,6 +90,16 @@ export default async function supplierRoutes(app) {
     async (req) => {
       const body = validate(historyListSchema, req.body);
       return supplierService.getHistory(body);
+    },
+  );
+
+  /** supplier 활성/비활성 토글 @route POST /api/supplier/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("supplier.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return supplierService.setActive(body, req.user);
     },
   );
 }

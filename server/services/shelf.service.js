@@ -2,9 +2,12 @@ import prisma from "../lib/prisma.js";
 import AppError from "../errors/AppError.js";
 
 export default {
-  /** 선반 전체 리스트 */
+  /** 선반 전체 리스트 — 기본 활성만 */
   async getAllList(data) {
+    const where = {};
+    if (!data?.includeInactive) where.is_active = true;
     return prisma.shelf.findMany({
+      where,
       orderBy: { sort: "asc" },
     });
   },
@@ -12,6 +15,7 @@ export default {
   /** 선반 리스트 (location_id 필터, location 조인) */
   async getList(data) {
     const where = {};
+    if (!data?.includeInactive) where.is_active = true;
 
     if (data?.location_id) {
       where.location_id = Number(data.location_id);
@@ -23,6 +27,18 @@ export default {
         location: true,
       },
       orderBy: { sort: "asc" },
+    });
+  },
+
+  /** 선반 활성/비활성 토글 */
+  async setActive(data, user) {
+    if (!data?.id) throw new AppError("ID가 필요합니다.", 400, "INVALID_ID");
+    if (typeof data.is_active !== "boolean") {
+      throw new AppError("is_active 값이 필요합니다.", 400, "INVALID_PARAMS");
+    }
+    return prisma.shelf.update({
+      where: { id: Number(data.id) },
+      data: { is_active: data.is_active },
     });
   },
 

@@ -7,6 +7,7 @@ import {
   batchDeleteSchema,
 } from "../validators/shelf.schema.js";
 import { permission } from "../middleware/permission.js";
+import { setActiveSchema } from "../validators/setActive.schema.js";
 
 /**
  * 선반(Shelf) 라우트 (/api/shelf/*)
@@ -78,6 +79,16 @@ export default async function shelfRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return shelfService.batchDelete(body);
+    },
+  );
+
+  /** shelf 활성/비활성 토글 @route POST /api/shelf/setActive */
+  app.post(
+    "/setActive",
+    { preHandler: permission("warehouse.shelf.update") },
+    async (req) => {
+      const body = validate(setActiveSchema, req.body);
+      return shelfService.setActive(body, req.user);
     },
   );
 }
