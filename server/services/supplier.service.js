@@ -51,6 +51,17 @@ export default {
     });
   },
 
+  /** 미수금/미지급금 총합 (전체 거래처, 비활성 포함) */
+  async getTotalAmount() {
+    const result = await prisma.supplier.aggregate({
+      _sum: { receivable: true, payable: true },
+    });
+    return {
+      totalReceivable: Number(result._sum.receivable ?? 0),
+      totalPayable: Number(result._sum.payable ?? 0),
+    };
+  },
+
   /** key 기준 그룹핑 */
   async getKeyGroup() {
     const res = await prisma.supplier.groupBy({

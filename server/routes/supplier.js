@@ -33,6 +33,15 @@ export default async function supplierRoutes(app) {
     },
   );
 
+  /** 미수금/미지급금 총합 @route POST /api/supplier/totalAmount */
+  app.post(
+    "/totalAmount",
+    { preHandler: permission("supplier.view") },
+    async () => {
+      return supplierService.getTotalAmount();
+    },
+  );
+
   /** 공급업체 단건 조회 @route GET /api/supplier/:id */
   app.get(
     "/:id",
