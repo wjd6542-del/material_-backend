@@ -67,7 +67,7 @@ export default async function materialRoutes(app) {
     "/:id",
     { preHandler: permission("material.view") },
     async (req) => {
-      const params = validate(idParamSchema, req.body);
+      const params = validate(idParamSchema, req.params);
       return materialService.getById(params.id, req.user);
     },
   );

@@ -128,7 +128,19 @@ export default {
     const rows = await prisma.stock.findMany({
       where,
       include: {
-        material: true,
+        material: {
+          include: {
+            images: {
+              select: {
+                id: true,
+                file_url: true,
+                file_name: true,
+              },
+              orderBy: { sort: "asc" },
+              take: 1,
+            },
+          },
+        },
         warehouse: true,
         location: true,
       },
@@ -136,15 +148,20 @@ export default {
     });
 
     const result = await Promise.all(
-      rows.map(async (row) => ({
-        ...row,
-        qrcode: await generateQR(row.material?.code),
-        material_code: row.material?.code ?? "",
-        material_name: row.material?.name ?? "",
-        warehouse_name: row.warehouse?.name ?? "",
-        location_name: row.location?.name ?? "",
-        location_code: row.location?.code ?? "",
-      })),
+      rows.map(async (row) => {
+        const image = row.material?.images?.[0];
+        return {
+          ...row,
+          qrcode: await generateQR(row.material?.code),
+          material_code: row.material?.code ?? "",
+          material_name: row.material?.name ?? "",
+          warehouse_name: row.warehouse?.name ?? "",
+          location_name: row.location?.name ?? "",
+          location_code: row.location?.code ?? "",
+          image: image || null,
+          image_url: image?.file_url || null,
+        };
+      }),
     );
 
     return result;
@@ -185,7 +202,19 @@ export default {
       prisma.stock.findMany({
         where,
         include: {
-          material: true,
+          material: {
+            include: {
+              images: {
+                select: {
+                  id: true,
+                  file_url: true,
+                  file_name: true,
+                },
+                orderBy: { sort: "asc" },
+                take: 1,
+              },
+            },
+          },
           warehouse: true,
           location: true,
         },
@@ -197,15 +226,20 @@ export default {
     ]);
 
     const result = await Promise.all(
-      rows.map(async (row) => ({
-        ...row,
-        qrcode: await generateQR(row.material?.code),
-        material_code: row.material?.code ?? "",
-        material_name: row.material?.name ?? "",
-        warehouse_name: row.warehouse?.name ?? "",
-        location_name: row.location?.name ?? "",
-        location_code: row.location?.code ?? "",
-      })),
+      rows.map(async (row) => {
+        const image = row.material?.images?.[0];
+        return {
+          ...row,
+          qrcode: await generateQR(row.material?.code),
+          material_code: row.material?.code ?? "",
+          material_name: row.material?.name ?? "",
+          warehouse_name: row.warehouse?.name ?? "",
+          location_name: row.location?.name ?? "",
+          location_code: row.location?.code ?? "",
+          image: image || null,
+          image_url: image?.file_url || null,
+        };
+      }),
     );
 
     return {
