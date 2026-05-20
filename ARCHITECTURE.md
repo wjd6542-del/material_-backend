@@ -430,7 +430,8 @@ MaterialRateHistory
 
 - **용도 분리**: `MaterialRate` 는 품목 등록 화면의 초기값 제공용, 실제 계산에 쓰이는 값은 `Material.*_rate`
 - **필드명 일치**: `MaterialRate` 의 요율 컬럼명을 Material 과 동일하게 맞춰 프론트에서 그대로 바인딩 가능
-- **엔드포인트**: `/api/material/priceHistory`, `/api/materialRate/info|save|history`
+- **단가 일괄조정**: `/api/material/batchUpdatePrice` — `{ items:[{id, ...가격}], reason? }` 를 받아 한 트랜잭션으로 일괄 수정. 요청에 없는 가격 필드는 기존값 유지, 최종 가격 6종으로 요율 5종 재계산. 가격이 실제 변경된 품목만 `MaterialPriceHistory(UPDATE)` 기록 + 배치당 요약 알림 1건 생성. 권한 `material.update`
+- **엔드포인트**: `/api/material/priceHistory`, `/api/material/batchUpdatePrice`, `/api/materialRate/info|save|history`
 
 ### 5.12 거래처(Supplier) 확장 + 이력
 
@@ -452,7 +453,7 @@ SupplierHistory (FK supplier_id, onDelete: Cascade)
 - **enum `SupplierType`**: `INBOUND`(구매=공급업체) / `OUTBOUND`(판매=고객사)
 - **자동 이력**: `supplier.service.save` 가 변경 감지하여 `SupplierHistory` 생성
 - **미지급금 자동 반영**: `inbound.service` 가 저장/삭제 시 `Supplier.payable` delta 적용 (§6.5 참조)
-- **엔드포인트**: `/api/supplier/history`
+- **엔드포인트**: `/api/supplier/history`, `/api/supplier/totalAmount` (전체 거래처 미수금·미지급금 합계, `aggregate._sum`)
 
 ---
 
@@ -529,10 +530,10 @@ SupplierHistory (FK supplier_id, onDelete: Cascade)
 | Prefix | 책임 | 주요 특이사항 |
 | --- | --- | --- |
 | `/api/auth` | 로그인/회원가입/비밀번호 재설정 | JWT(3h), Resend 이메일 인증 |
-| `/api/material` | 품목 마스터 + 이미지 + 태그 | multipart 업로드, QR 생성 |
+| `/api/material` | 품목 마스터 + 이미지 + 태그 | multipart 업로드, QR 생성, 단가 일괄조정(`batchUpdatePrice`) |
 | `/api/category` | 품목 카테고리 트리 | path/depth, 자식→부모 순 삭제 |
 | `/api/tag` | 태그 + 품목-태그 매핑 | `syncMaterialTags` 재동기화 |
-| `/api/supplier` | 공급업체 | |
+| `/api/supplier` | 공급업체 | 변경 이력(`history`), 미수금·미지급금 총합(`totalAmount`) |
 | `/api/business` | 사업자(등록번호·회사명·대표·주소·연락처·FAX) | 독립 마스터, 공통 CRUD 6종 |
 | `/api/warehouse` | 창고 (도면 좌표 포함) | 삭제 시 Location/Shelf cascade |
 | `/api/location` | 창고 내 위치 | |

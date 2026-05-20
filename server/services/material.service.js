@@ -45,6 +45,31 @@ function pickPrices(obj) {
   return out;
 }
 
+/** 소수 4자리 반올림 (Decimal(7,4) 비율 컬럼용) */
+function round4(v) {
+  return Math.round((Number(v) || 0) * 10000) / 10000;
+}
+
+/**
+ * 최종 가격 6종으로부터 비율 5종을 재계산한다.
+ * - outbound_rate1: 구매단가(원가) 대비 판매1
+ * - 그 외: 판매1(BASE) 대비 비율
+ * - 분모가 0이면 0 (프론트 MaterialModal 자동계산 규칙과 동일)
+ * @param {Record<string, number>} p 가격 6종
+ * @returns {Record<string, number>} 비율 5종
+ */
+function recalcRates(p) {
+  const cost = Number(p.inbound_price) || 0;
+  const base = Number(p.outbound_price1) || 0;
+  return {
+    outbound_rate1: cost > 0 ? round4(base / cost) : 0,
+    outbound_rate2: base > 0 ? round4((Number(p.outbound_price2) || 0) / base) : 0,
+    wholesale_rate1: base > 0 ? round4((Number(p.wholesale_price1) || 0) / base) : 0,
+    wholesale_rate2: base > 0 ? round4((Number(p.wholesale_price2) || 0) / base) : 0,
+    online_rate: base > 0 ? round4((Number(p.online_price) || 0) / base) : 0,
+  };
+}
+
 /** 두 가격 스냅샷 비교 (정규화된 number 비교) */
 function pricesDiffer(before, after) {
   return PRICE_FIELDS.some((k) => before[k] !== after[k]);
@@ -458,6 +483,106 @@ export default {
           );
         }),
       ),
+    );
+  },
+
+  /**
+   * 품목 단가 일괄조정
+   * - items[].id + 조정된 가격 필드(부분 가능)를 받아 한 트랜잭션으로 일괄 수정
+   * - 요청에 없는 가격 필드는 기존값을 유지한다
+   * - 최종 가격 6종으로 비율 5종을 서버에서 재계산해 일관성을 유지한다
+   * - 가격/비율이 실제로 바뀐 품목만 MaterialPriceHistory(UPDATE) 1행 기록
+   * @param {{items:Array<{id:number}>, reason?:string}} data
+   * @param {Object} user 로그인 사용자
+   * @returns {Promise<{success:boolean, updated:number}>}
+   */
+  async batchUpdatePrice(data, user) {
+    const items = data?.items ?? [];
+    if (!items.length) {
+      throw new AppError("조정할 품목이 없습니다.", 400, "NOT_FOUND_DATA");
+    }
+
+    const reason = data?.reason?.trim() || null;
+    const ids = items.map((it) => Number(it.id));
+
+    return prisma.$transaction(
+      async (tx) => {
+        // 대상 품목을 한 번에 조회해 맵으로 보관
+        const existingRows = await tx.material.findMany({
+          where: { id: { in: ids } },
+        });
+        const existingMap = new Map(existingRows.map((r) => [r.id, r]));
+
+        const historyData = [];
+        let updated = 0;
+
+        for (const item of items) {
+          const id = Number(item.id);
+          const existing = existingMap.get(id);
+          if (!existing) {
+            throw new AppError(
+              `품목(ID ${id})을 찾을 수 없습니다.`,
+              404,
+              "NOT_FOUND",
+            );
+          }
+
+          const oldPrices = pickPrices(existing);
+
+          // 요청에 포함된 가격만 덮어쓰고 나머지는 기존값 유지
+          const nextPrices = {
+            inbound_price: Number(item.inbound_price ?? existing.inbound_price),
+            outbound_price1: Number(item.outbound_price1 ?? existing.outbound_price1),
+            outbound_price2: Number(item.outbound_price2 ?? existing.outbound_price2),
+            wholesale_price1: Number(item.wholesale_price1 ?? existing.wholesale_price1),
+            wholesale_price2: Number(item.wholesale_price2 ?? existing.wholesale_price2),
+            online_price: Number(item.online_price ?? existing.online_price),
+          };
+
+          // 최종 가격으로 비율 재계산 후 11개 필드 스냅샷
+          const rates = recalcRates(nextPrices);
+          const newSnapshot = pickPrices({ ...nextPrices, ...rates });
+
+          // 실제 변동 없으면 건너뜀 (불필요한 update / 이력 방지)
+          if (!pricesDiffer(oldPrices, newSnapshot)) continue;
+
+          await tx.material.update({
+            where: { id },
+            data: { ...nextPrices, ...rates },
+          });
+
+          historyData.push({
+            material_id: id,
+            ...newSnapshot,
+            action: "UPDATE",
+            changed_by: user?.id ?? null,
+            reason,
+          });
+          updated += 1;
+        }
+
+        if (historyData.length) {
+          await tx.materialPriceHistory.createMany({ data: historyData });
+        }
+
+        // 일괄 처리는 품목당이 아니라 배치당 요약 알림 1건만 생성 (단건 save 의 품목별 알림과 구분)
+        if (updated > 0) {
+          await tx.notification.create({
+            data: {
+              user_id: user?.id ?? null,
+              type: "MATERIAL",
+              title: "단가 일괄조정",
+              action: "UPDATE",
+              message: `${updated}개 품목의 단가가 일괄 조정되었습니다.`,
+              target_type: "material",
+              target_id: null,
+            },
+          });
+        }
+
+        return { success: true, updated };
+      },
+      { timeout: 30000, maxWait: 10000 },
     );
   },
 

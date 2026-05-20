@@ -138,3 +138,27 @@ export const updateSchema = z.object({
 export const batchDeleteSchema = z
   .array(idParamSchema)
   .min(1, "삭제할 데이터가 없습니다.");
+
+/** 단가 일괄조정 — 품목별 조정된 가격 6종(부분 가능). 비율은 서버에서 재계산하므로 받지 않음 */
+const batchPriceItemFields = {
+  inbound_price: z.coerce.number().min(0).optional(),
+  outbound_price1: z.coerce.number().min(0).optional(),
+  outbound_price2: z.coerce.number().min(0).optional(),
+  wholesale_price1: z.coerce.number().min(0).optional(),
+  wholesale_price2: z.coerce.number().min(0).optional(),
+  online_price: z.coerce.number().min(0).optional(),
+};
+
+export const batchUpdatePriceSchema = z.object({
+  // 가격 변동 이력(MaterialPriceHistory.reason)에 기록될 사유 (선택)
+  reason: z.string().trim().max(255).optional(),
+  items: z
+    .array(
+      z.object({
+        id: z.coerce.number().int().positive(),
+        ...batchPriceItemFields,
+      }),
+    )
+    .min(1, "조정할 품목이 없습니다.")
+    .max(2000, "한 번에 최대 2000건까지 조정할 수 있습니다."),
+});

@@ -8,6 +8,7 @@ import {
   saveSchema,
   updateSchema,
   batchDeleteSchema,
+  batchUpdatePriceSchema,
   priceHistoryListSchema,
 } from "../validators/material.schema.js";
 
@@ -89,6 +90,16 @@ export default async function materialRoutes(app) {
     async (req) => {
       const body = validate(batchDeleteSchema, req.body);
       return materialService.batchDelete(body, req.user);
+    },
+  );
+
+  /** 품목 단가 일괄조정 @route POST /api/material/batchUpdatePrice */
+  app.post(
+    "/batchUpdatePrice",
+    { preHandler: permission("material.update") },
+    async (req) => {
+      const body = validate(batchUpdatePriceSchema, req.body);
+      return materialService.batchUpdatePrice(body, req.user);
     },
   );
 
